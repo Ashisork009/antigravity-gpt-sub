@@ -1,0 +1,6 @@
+{
+  "name": "native-probe-router",
+  "display_name": "原生模型路由",
+  "description": "在已适配的桌面上启用本地模型目录与推理路由。",
+  "version": "0.2.0"
+}

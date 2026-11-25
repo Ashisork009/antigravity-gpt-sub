@@ -1,0 +1,22 @@
+{
+  "plugin": {
+    "plugin.json": "4b11f6be984a844b170dc432edce730847367babcb605cab959f6aee6e6efce9"
+  },
+  "runtime": {
+    "native-probe-router/sidecars/router/picker-state.mjs": "9b03109408168291a9aade4bda0bea03eeccf8e49c159209b15d7775bde4608d",
+    "native-probe-router/sidecars/router/router.mjs": "791f83ac6d05105e7b55f974ea6b3f27a7d6608fc440d7e8e4ca7c0077a5f13b",
+    "restart2351/router/codex/backend.mjs": "2bb1af12ea7418580bba1720e17ca2335e9bda373e8151097921f0a69c0d4b7f",
+    "restart2351/router/desktop_runtime.mjs": "d6a7a44f834f563bebe783904eac99bc8f8a57f3e9ca43f6b3ea44c840d11e8b",
+    "restart2351/router/lease/gate.mjs": "7094743a63f2d82f5fec0ec2e0a2c163785d42815e588b95a2fdfc66af4db7ba",
+    "restart2351/router/serve.mjs": "dd593a22dc676d7e055afcb7cf6c23b7435e476c33026469f0c431750e82dcdf"
+  },
+  "sidecar": {
+    "control.mjs": "d5a22347130d92d8342ce83c4323f75cac116ce8d7614d80576bcc874b64f1d0",
+    "gate.mjs": "7094743a63f2d82f5fec0ec2e0a2c163785d42815e588b95a2fdfc66af4db7ba",
+    "inspect_owner.mjs": "7a48dd83edb501e69d04ece2ac8075ba41c6c1996a0962dab54ee1dc3232c2ec",
+    "owner_lifetime.mjs": "3c9778bb80f6aec3866350907f8f9a2b604db654c079b31bc775f1dc478989e4",
+    "renew.mjs": "dd4f739a88a5c30083f47c0d9a92b3f0ded3d19fa92aa22c34d1b938df698f53",
+    "sidecar.json": "93173c4a3ea4f862e35c3363fc3a8ba5093a37493abdb9fa9caed042db9b3fb2",
+    "verify-host.ps1": "2a6b6142a990167f2217d6fb9aa89a7c680496f0baa380405fc66e1d595b2f4b"
+  }
+}
