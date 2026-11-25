@@ -14,7 +14,7 @@ function trialAction(wire,id){
   const text=last?.content?.map(p=>p.text??'').join('\n')??'';
   if(text.includes('AGY_FIXTURE_FAULT'))return {status:503};
   if(text.includes('AGY_FIXTURE_SLOW'))return {slow:true};
-  const match=text.match(/AGY_FIXTURE_READ\s+([^\r\n<>"]*?[\\/]sample-project[\\/]wire-marker\.txt)/i);
+  const match=text.match(/AGY_FIXTURE_READ\s+([^\r\n<>"]*?[\\/]专用审批项目[\\/]wire-marker\.txt)/i);
   const recall=text.includes('AGY_FIXTURE_RECALL');
   if(!match&&!recall)return {};
   const result=wire.input.filter(i=>i.type==='function_call_output').map(i=>JSON.stringify(i.output)).join('\n');

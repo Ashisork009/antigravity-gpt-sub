@@ -1,6 +1,8 @@
 # Windows 原生订阅模型插件
 
-本包适配已核对构建的 Antigravity 2.35.1。安装器需要 Python 3.11 或更高版本。日常运行使用 Antigravity 自带的 Electron、语言服务及官方 sidecar JavaScript 运行时，不依赖系统 Node 或单独启动的代理。
+本包适配 Antigravity 2.35.2（仅校验宿主版本号与代码注入锚点，不强校验宿主整包哈希，可与汉化补丁等第三方本地补丁共存）。安装器需要 Python 3.11 或更高版本。日常运行使用 Antigravity 自带的 Electron、语言服务及官方 sidecar JavaScript 运行时，不依赖系统 Node 或单独启动的代理。
+
+当 Antigravity 桌面端自动更新（例如从 2.35.1 升级到 2.35.2）导致旧版插件失效，或在已打汉化补丁的 2.35.2 上安装时，直接双击新版安装包中的 `双击安装或管理.cmd` 选择 `[1]` 即可自动归档旧收据、动态生成适配当前本机语言服务的覆盖层并仅注入 `dist/languageServer.js`——完整保留汉化补丁改动、订阅登录、模型偏好与协作 Skill 配置。若之后又重新打了 `language_server.exe` 汉化补丁，再次双击选 `[1]` 即可刷新界面覆盖层。
 
 安装器会核对本机语言服务、内嵌的原厂 Web 归档和应用入口，在本机生成适配模型菜单刷新、订阅档位顺序与选中模型恢复的界面资源 ZIP。生成位置为 `%USERPROFILE%\.antigravity-native-model-router\overlays\<SHA256>.zip`。桌面启动时验证该文件，使用语言服务的 `--web_bundle_path` 指定界面资源。原有自定义启动参数优先。卸载和回滚使用各自的收据与哈希清理安装器生成的 ZIP。
 
@@ -9,6 +11,8 @@
 设置入口为个性化定制的已安装插件列表中的“Codex 订阅模型”。首次订阅连接使用官方授权页面。用于内部验收的独立诊断包在界面标注“确定性验收”，只用于模拟测试。
 
 在详情页选择 **UI Plugins → 模型与推理等级 → 在侧边面板中打开**。默认选择 GPT-6.2 Sol、GPT-6.2 Astra 以及 Low、Medium、High、Extra High、Max。档位只在订阅目录声明该模型支持时显示。原生对话输入框的模型按钮显示当前选中的模型与档位。
+
+v0.5.0 的设置面板新增 **协作工作流 Skill**，默认关闭，可选择中文或 English。开启后挂载到 `~/.gemini/config/skills/gpt-swarm-workflow/`，下一轮对话生效；开启时切换语言会立即替换托管模板。若目录有手工修改，管理器会保留原样。通过 Antigravity 原生插件页直接禁用或删除插件不会触发 Skill 清理；请先在面板关闭开关，或使用管理脚本卸载。
 
 误删设置页的模型插件后，从同一份解压目录运行 `python -B manage.py repair`。该操作验证收据、归档及文件哈希，恢复缺失的插件文件，并将损坏的原文件保存到用户目录。修复命令会输出备份目录。要撤销这次修复，可在退出桌面后运行 `python -B manage.py undo-repair --journal "备份目录"`。若语言服务或路由组件需要修复，退出桌面后运行 `python -B manage.py install`。
 

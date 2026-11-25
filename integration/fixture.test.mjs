@@ -9,7 +9,7 @@ import {openFixture} from './fixture.mjs';
 test('instrumented endpoint proposes a native file operation and observes upstream cancellation',async()=>{
   const dir=await mkdtemp(join(tmpdir(),'native-model-fixture-'));
   const endpoint=await openFixture(dir);
-  const path='E:\\native-fixture\\sample-project\\wire-marker.txt';
+  const path='E:\\native-fixture\\专用审批项目\\wire-marker.txt';
   const user=text=>({role:'user',content:[{type:'input_text',text}]});
   const invoke=(input,signal)=>endpoint.respond({signal,body:{input,model:'gpt-6.2-sol',reasoning:{effort:'high'},
     tools:[{type:'function',name:'view_file',parameters:{type:'object',properties:{AbsolutePath:{type:'string'}},required:['AbsolutePath']}}]}});

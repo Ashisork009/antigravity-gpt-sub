@@ -38,14 +38,23 @@ class LauncherTests(unittest.TestCase):
             self.assertFalse(st["same_build"])
             store.mkdir()
             (store / "owned.json").write_text(
-                json.dumps({"build": "aaaabbbbccccddddeeee", "release": {"version": "0.4.4"}, "predecessor": "prev"}),
+                json.dumps({"build": "aaaabbbbccccddddeeee", "release": {"version": "0.4.4", "host": "2.35.1"}, "predecessor": "prev"}),
                 encoding="utf-8",
             )
             st2 = launcher.current_status(pkg_dir=pkg, store=store, app=app)
             self.assertTrue(st2["installed"])
             self.assertTrue(st2["same_build"])
             self.assertTrue(st2["has_predecessor"])
+            self.assertFalse(st2["host_changed"])
+            (pkg / "release.json").write_text(
+                json.dumps({"version": "0.5.1", "flavor": "subscription", "host": "2.35.2", "build": "bbbbccccddddeeeeffff"}),
+                encoding="utf-8",
+            )
+            st3 = launcher.current_status(pkg_dir=pkg, store=store, app=app)
+            self.assertTrue(st3["host_changed"])
+            self.assertFalse(st3["has_predecessor"])
         self.assertIn("升级完成", launcher.format_result("upgrade", {"state": "upgraded", "from": "old", "build": "new"}))
+        self.assertIn("已适配新版 Antigravity", launcher.format_result("upgrade", {"state": "migrated_host", "previous_host": "2.35.1", "host": "2.35.2", "build": "new"}))
         self.assertIn("安装完成", launcher.format_result("install", {"state": "installed", "build": "new"}))
         self.assertIn("卸载完成", launcher.format_result("uninstall", {"state": "uninstalled"}))
         self.assertIn("预览校验通过", launcher.format_result("preview", {"build": "b1", "candidate": "sha"}))
@@ -137,6 +146,17 @@ class LauncherTests(unittest.TestCase):
                 self.assertTrue(ok)
                 self.assertIn("普通权限", msg)
                 self.assertEqual(popen.call_args[0][0], ["explorer.exe", str(exe)])
+
+    def test_run_manage_reports_skill_warnings_without_failing(self):
+        for skill, expected in [({"state": "preserved_conflict"}, "已原样保留"),
+                                ({"state": "unavailable", "warning": "无法同步模板"}, "无法同步模板")]:
+            with self.subTest(skill=skill), mock.patch.object(launcher.subprocess, "run",
+                    return_value=mock.Mock(returncode=0, stdout=json.dumps({"state": "uninstalled", "skill": skill}))):
+                ok, message = launcher.run_manage("uninstall")
+                self.assertTrue(ok)
+                self.assertIn("卸载完成", message)
+                self.assertIn("[警告]", message)
+                self.assertIn(expected, message)
 
     def test_main_auto_close_and_auto_restart_flow(self):
         with tempfile.TemporaryDirectory() as td:

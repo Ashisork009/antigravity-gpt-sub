@@ -4,7 +4,7 @@ const defaultModels=['gpt-6.2-sol','gpt-6.2-astra'];
 const defaultEfforts=['low','medium','high','xhigh','max'];
 const labels={low:'Low',medium:'Medium',high:'High',xhigh:'Extra High',max:'Max'};
 const modelLabels={'gpt-6.2-sol':'GPT-6.2 Sol','gpt-6.2-astra':'GPT-6.2 Astra'};
-let state,latest='',busy=false,loading=false,queuedUntil=0;
+let state,latest='',busy=false,loading=false,queuedUntil=0,gen=0;
 function notice(text){$('notice').textContent=text;$('notice').hidden=!text;}
 async function call(path,data={}){
   const r=await window.sidecar.fetch(path,{method:'POST',body:JSON.stringify(data)});
@@ -23,9 +23,35 @@ function row(parent,group,value,selected,detail) {
   if(detail){const small=document.createElement('small');small.textContent=detail;span.append(small);}
   label.append(input,span);parent.append(label);
 }
+const skillLanguages={zh:'中文',en:'English'};
+function skillNotice(text){$('skill-error').textContent=text;$('skill-error').hidden=!text;}
+function renderSkill(skill){
+  const enabled=$('skill-enabled'),language=$('skill-language'),sync=$('skill-sync');
+  const available=!!skill&&!skill.error,residual=skill?.status==='active'&&!skill.enabled;
+  const disabled=busy||!available||skill?.status==='conflict';
+  enabled.checked=!!skill?.enabled||residual;enabled.disabled=disabled;
+  language.value=skill?.language??'zh';language.disabled=disabled||residual;
+  sync.hidden=!['outdated','missing'].includes(skill?.status);sync.disabled=disabled;
+  const installed=available?`${skillLanguages[skill.installedLanguage]} · ${skill.installedVersion==='dev'?'dev':'v'+skill.installedVersion}`:'';
+  const messages={off:'默认关闭，开启后挂载至全局 Skill（下一轮对话生效）。',
+    active:residual?`全局 Skill 仍已挂载（${installed}），关闭开关可清理。`:`已启用（${installed}），下一轮对话生效。`,
+    outdated:'已安装的模板版本或语言不一致，点击同步更新。',missing:'全局 Skill 目录缺失，点击重新写入。',
+    conflict:'检测到同名自定义或已修改的 Skill 目录，已保护未覆盖，请先手动处理。'};
+  $('skill-status').textContent=messages[skill?.status]??'暂时无法读取 Skill 设置。';
+}
+async function updateSkill(changes){
+  const skill=state?.skill;
+  if(busy||!skill?.stamp)return;
+  ++gen;busy=true;render(state);skillNotice('');
+  try{state=await call('/api/skill',{stamp:skill.stamp,enabled:skill.enabled,language:skill.language,...changes});}
+  catch(e){skillNotice(e.message==='skill_directory_conflict'?'目录有冲突，未保存任何更改。':
+    e.message==='skill_changed'?'Skill 状态已变化，已重新读取。':'无法保存 Skill 设置，请重试。');}
+  finally{busy=false;latest='';render(state);await refresh();}
+}
 function render(s){
   state=s;
   const sKey=JSON.stringify([s,busy,Date.now()<queuedUntil]);if(latest===sKey)return;latest=sKey;
+  renderSkill(s.skill);
   const wait=s.pending||Date.now()<queuedUntil;
   $('connection').textContent=s.fixture?'确定性测试模型已连接':wait?'等待系统浏览器完成订阅授权':s.connected?'使用已授权的 ChatGPT 订阅':
     s.error==='gateway_starting'?'正在连接宿主网关':'连接 ChatGPT 后可读取当前订阅支持的模型和等级。';
@@ -51,14 +77,15 @@ function render(s){
 }
 async function refresh(){
   if(loading||busy)return;loading=true;
-  try{const s=await call('/api/state');if(!busy)render(s);}
-  catch{notice('暂时无法读取设置，正在等待宿主。');}finally{loading=false;}
+  const g=gen;
+  try{const s=await call('/api/state');if(!busy&&g===gen)render(s);}
+  catch{if(!busy&&g===gen)notice('暂时无法读取设置，正在等待宿主。');}finally{loading=false;}
 }
 async function update(group,value,checked){
   if(busy||!state)return;
   const prefs={...state.prefs};
   prefs[group]=value===null?[]:checked?unique([...prefs[group],value]):prefs[group].filter(x=>x!==value);
-  busy=true;render(state);
+  ++gen;busy=true;render(state);
   try{const next=await call('/api/model-preferences',{stamp:state.stamp,prefs});notice('');state=next;}
   catch(e){notice(e.status===409?'其他窗口已修改设置，已重新读取。':'保存失败，请重新选择。');}
   finally{busy=false;latest='';render(state);await refresh();}
@@ -69,5 +96,8 @@ $('signin').addEventListener('click',async()=>{
   finally{busy=false;render(state);}
 });
 for(const g of ['models','efforts'])$(g+'-none').addEventListener('click',()=>void update(g,null,false));
+$('skill-enabled').addEventListener('change',e=>void updateSkill({enabled:e.target.checked}));
+$('skill-language').addEventListener('change',e=>void updateSkill({language:e.target.value}));
+$('skill-sync').addEventListener('click',()=>void updateSkill({sync:true}));
 void refresh();setInterval(refresh,700);
 

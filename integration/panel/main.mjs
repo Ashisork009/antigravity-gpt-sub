@@ -4,9 +4,14 @@ import {join} from 'node:path';
 import {connect} from 'node:net';
 import {SidecarApp,Response} from 'sidecar_sdk';
 import {panelStore} from './store.mjs';
+import {skillStore} from './skill-store.mjs';
 
 if(!process.env.ANTIGRAVITY_SIDECAR_UI_TOKEN) throw Error('This settings view requires a host-authenticated panel');
-const app=new SidecarApp(),store=panelStore(join(homedir(),'.antigravity-native-model-router'));
+const stateDir=join(homedir(),'.antigravity-native-model-router');
+const app=new SidecarApp(),store=panelStore(stateDir),skills=skillStore(stateDir);
+function safeSkillSnapshot(){
+  try{return skills.snapshot();}catch{return {error:'skill_unavailable'};}
+}
 const safeHeaders={'Cache-Control':'no-store','Referrer-Policy':'no-referrer','X-Content-Type-Options':'nosniff',
   'Content-Security-Policy':"default-src 'self'; script-src 'self'; connect-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"};
 for(const [route,file,mime] of [['/','index.html','text/html; charset=utf-8'],['/panel.js','panel.js','application/javascript'],['/panel.css','panel.css','text/css']]) {
@@ -20,7 +25,13 @@ function endpoint(path,handler) {
       {contentType:'application/json',status:e.status??503,headers:safeHeaders});}
   },'POST');
 }
-endpoint('/api/state',store.snapshot);endpoint('/api/model-preferences',store.save);endpoint('/api/signin',store.signin);
+endpoint('/api/state',()=>({...store.snapshot(),skill:safeSkillSnapshot()}));
+endpoint('/api/model-preferences',async data=>({...await store.save(data),skill:safeSkillSnapshot()}));
+endpoint('/api/signin',store.signin);
+endpoint('/api/skill',async data=>{
+  const nextSkill=await skills.update(data);
+  return {...store.snapshot(),skill:nextSkill};
+});
 process.chdir(homedir());
 await app.run();
 const owner=new URL('http://'+process.env.ANTIGRAVITY_LS_ADDRESS);

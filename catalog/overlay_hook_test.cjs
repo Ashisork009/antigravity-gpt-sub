@@ -6,7 +6,7 @@ function checkEffortSubmenu(){
   const input=['high','max','low','medium','xhigh'];
   const canonical=['low','medium','high','xhigh','max'];
   const labels={low:'Low',medium:'Medium',high:'High',xhigh:'Extra High',max:'Max',minimal:'Minimal',adaptive:'Adaptive',ultra:'Ultra'};
-  const components=Object.fromEntries(['rW','sW','G5','jW','jJ','sx','mW','nW','kW'].map(name=>[name,name]));
+  const components=Object.fromEntries(['rW','sW','G5','jW','jJ','rx','mW','nW','kW'].map(name=>[name,name]));
   function render(family,branch,withContext,published=input){
     const options=published.map((level,i)=>({modelId:family+'-'+level,label:family+' ('+labels[level]+')',value:1000+i}));
     const groups={[family]:{displayName:'Example',defaultThinkingSuffix:'medium',
@@ -14,7 +14,7 @@ function checkEffortSubmenu(){
     let choice;
     const script=group+'\nconst f=lVb(options,groups); (function(){'+branch+'})()';
     const result=vm.runInNewContext(script,{...components,options,groups,a:options[0],c:options[3],
-      O:false,N:false,F:'test',n:withContext,D:'context-option',gYb:()=>true,b:option=>{choice=option},
+      O:false,N:false,F:'test',n:withContext,D:'context-option',hYb:()=>true,b:option=>{choice=option},
       E:{createElement:(kind,props,...children)=>({kind,props,children:children.flat()})}});
     const nodes=[];
     function walk(el){if(!el||typeof el!=='object')return;nodes.push(el);el.children.forEach(walk)}
@@ -50,12 +50,12 @@ async function test(){
   const slug='codex-gpt-6.2-sol-medium',native={modelId:'gemini',value:4,label:'Gemini'};
   const restored={modelId:slug,value:72,label:'GPT-6.2 Sol (Medium)'};
   const scope={
-    e: value => value, ll:()=>auth,l:false,b:'cid',m:{},x:false,C:native,vA:{},G:{Model:{UNSPECIFIED:0}},
-    wl:()=>previousConfig,vl:select=>select(state),nm:()=>({stepCount:4}),SB:()=>scope.options,options:[native],
+    e: value => value, hl:()=>auth,m:false,b:'cid',n:{},y:false,B:native,uA:{},G:{Model:{UNSPECIFIED:0}},
+    vl:()=>previousConfig,ul:select=>select(state),nm:()=>({stepCount:4}),RB:()=>scope.options,options:[native],
     E:{useEffect(cb){fn=cb},useContext(){return agent},useState(){return [expired,next=>{expired=next}]}},
-    F:{getState(){return state},dispatch(x){dispatches.push(x)}},
-    Zj: () => new Map(), U3b: value => Boolean(value?.email), Z_a: () => undefined,
-    ara:value=>value, $B:value=>value, console, uh:class extends Error{},
+    D:{getState(){return state},dispatch(x){dispatches.push(x)}},
+    bk: () => new Map(), V3b: value => Boolean(value?.email), Z_a: () => undefined, $_a: () => undefined,
+    ara:value=>value, ZB:value=>value, console, vh:class extends Error{},
     setTimeout(cb,ms){const timer=()=>cb();timers.set(timer,ms);return timer},clearTimeout(timer){timers.delete(timer)}
   };
   const agent={getUserStatus(){return new Promise(resolve=>replies.push(resolve))}};
@@ -64,14 +64,14 @@ async function test(){
   const render=()=>{cleanup?.();button=script.runInContext(scope);cleanup=fn()};
   const finish=async(i,name)=>{replies[i]({userStatus:{email:'sample@example.invalid',name}});await new Promise(r=>setImmediate(r))};
   render();assert.equal(replies.length,0);
-  scope.l=true;render();assert.equal(replies.length,1);assert.equal(timers.size,1);
+  scope.m=true;render();assert.equal(replies.length,1);assert.equal(timers.size,1);
   for(const cb of [...timers.keys()])cb();
   await finish(1,'newer');await finish(0,'old');assert.deepEqual(dispatches.map(x=>x.name),['newer']);
-  scope.l=false;render();assert.equal(timers.size,0);
-  scope.l=true;render();scope.l=false;render();await finish(2,'closed');assert.equal(dispatches.length,1);
-  scope.l=true;render();auth={state:'signedIn'};await finish(3,'other account');assert.equal(dispatches.length,1);
-  scope.l=false;render();scope.l=true;auth={state:'signedOut'};render();assert.equal(replies.length,4);assert.equal(timers.size,0);
-  auth={state:'signedIn'};scope.l=false;
+  scope.m=false;render();assert.equal(timers.size,0);
+  scope.m=true;render();scope.m=false;render();await finish(2,'closed');assert.equal(dispatches.length,1);
+  scope.m=true;render();auth={state:'signedIn'};await finish(3,'other account');assert.equal(dispatches.length,1);
+  scope.m=false;render();scope.m=true;auth={state:'signedOut'};render();assert.equal(replies.length,4);assert.equal(timers.size,0);
+  auth={state:'signedIn'};scope.m=false;
   previousConfig={modelName:slug,planModel:18};render();
   assert.equal(replies.length,5,'restoring a subscription fetches immediately with the picker closed');
   assert.match(button.label,/恢复/);assert.equal(timers.size,7);
@@ -82,15 +82,15 @@ async function test(){
   assert.throws(()=>scope.agResumeGuard(undefined,state,'cid',native,cfg),/历史/);
   const sameOldSlot={modelId:'vendor-native',label:'Native slot',modelOrAlias:{choice:{case:'model',value:18}}};
   const moved={modelId:slug,label:restored.label,modelOrAlias:{choice:{case:'model',value:72}}};
-  assert.equal(scope.bhc(source,[sameOldSlot,moved],row).modelLabel,restored.label);
-  assert.equal(scope.bhc(source,[sameOldSlot],row).modelLabel,undefined);
-  scope.options=[native,restored];scope.C=restored;render();
+  assert.equal(scope.chc(source,[sameOldSlot,moved],row).modelLabel,restored.label);
+  assert.equal(scope.chc(source,[sameOldSlot],row).modelLabel,undefined);
+  scope.options=[native,restored];scope.B=restored;render();
   assert.equal(button,restored);assert.equal(timers.size,0);
   assert.doesNotThrow(()=>guard(restored,cfg));
   assert.throws(()=>guard(restored,{plannerConfig:{planModel:18}}),/订阅模型/,'stale slot');
   const beforeNative=replies.length;
   state.modelSelection={trajectorySync:{cid:{pick:{atStep:4}}},byConversation:{cid:{model:4}}};
-  scope.C=native;render();assert.equal(button,native);assert.equal(replies.length,beforeNative);
+  scope.B=native;render();assert.equal(button,native);assert.equal(replies.length,beforeNative);
   assert.doesNotThrow(()=>guard(native,{plannerConfig:{planModel:4}}));
   state.modelSelection.byConversation.cid={model:72,customLabel:slug};scope.options=[native];
   assert.throws(()=>guard(native,{plannerConfig:{planModel:4}}),/订阅模型/);

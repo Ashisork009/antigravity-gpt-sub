@@ -8,4 +8,13 @@
 <section aria-labelledby="models-title"><div class="title"><h2 id="models-title">显示的模型</h2><button type="button" id="models-none">取消全选</button></div><div id="models"></div></section>
 <section aria-labelledby="efforts-title"><div class="title"><h2 id="efforts-title">显示的推理等级</h2><button type="button" id="efforts-none">取消全选</button></div>
 <div id="efforts"></div><p id="selection-summary" aria-live="polite"></p></section>
+<section aria-labelledby="skill-title">
+<h2 id="skill-title">协作工作流 Skill</h2>
+<label class="row"><input id="skill-enabled" type="checkbox" aria-describedby="skill-status" disabled><span>启用 GPT-6.2 协作与蜂群工作流 Skill</span></label>
+<div class="skill-actions"><label for="skill-language">语言</label>
+<select id="skill-language" disabled><option value="zh">中文</option><option value="en">English</option></select>
+<button id="skill-sync" type="button" hidden>同步模板</button></div>
+<p id="skill-status" role="status">正在读取 Skill 设置…</p>
+<p id="skill-error" role="alert" hidden></p>
+</section>
 </main></body></html>

@@ -6,7 +6,7 @@ const effortNames={none:'None',minimal:'Minimal',low:'Low',medium:'Medium',high:
 const effortOrder=Object.freeze(['none','minimal',...defaultEfforts]);
 const prefix='codex-';
 const legacyPrefix='ag-codex-';
-// Verified in the 2.35.1 executable's Model enum. Revalidate before allowing a new build.
+// Verified in the 2.35.2 executable's Model enum (0..1650). Revalidate before allowing a new build.
 const slotCount=1651;
 const own=(o,k)=>Object.hasOwn(o,k);
 const object=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);

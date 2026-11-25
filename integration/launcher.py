@@ -294,8 +294,11 @@ def current_status(pkg_dir=HERE, store=None, app=None):
     owned = read_json(store / "owned.json")
     installed_release = (owned or {}).get("release") or {}
     installed_build = (owned or {}).get("build")
+    installed_host = installed_release.get("host")
     pkg_build = release.get("build")
+    pkg_host = release.get("host", "unknown")
     same_build = bool(installed_build and pkg_build and installed_build == pkg_build)
+    host_changed = bool(owned is not None and installed_host and pkg_host != "unknown" and installed_host != pkg_host)
     return {
         "python_ok": sys.version_info >= (3, 11),
         "python_version": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
@@ -303,13 +306,15 @@ def current_status(pkg_dir=HERE, store=None, app=None):
         "app_present": (app / "Antigravity.exe").is_file() and (app / "resources/bin/language_server.exe").is_file(),
         "package_version": release.get("version", "unknown"),
         "package_flavor": release.get("flavor", "subscription"),
-        "package_host": release.get("host", "unknown"),
+        "package_host": pkg_host,
         "package_build": pkg_build or "unknown",
         "installed": owned is not None,
         "installed_version": installed_release.get("version") or ("v3.3" if installed_build else None),
+        "installed_host": installed_host,
         "installed_build": installed_build,
-        "has_predecessor": bool((owned or {}).get("predecessor")),
+        "has_predecessor": bool((owned or {}).get("predecessor")) and not host_changed,
         "same_build": same_build,
+        "host_changed": host_changed,
         "running": antigravity_running(app),
     }
 
@@ -320,6 +325,8 @@ def format_result(action, data):
         return f"安装完成！（构建号：{data.get('build')}）"
     if state == "upgraded":
         return f"升级完成！（{data.get('from', '')} -> {data.get('build')}）"
+    if state == "migrated_host":
+        return f"已适配新版 Antigravity（{data.get('previous_host', '旧版')} -> {data.get('host', '')}）并完成重新安装！（构建号：{data.get('build')}）"
     if state == "verified":
         return f"校验通过：当前安装完整无损（构建号：{data.get('build')}）。"
     if state == "repaired":
@@ -341,7 +348,13 @@ def run_manage(action, pkg_dir=HERE):
     if proc.returncode == 0:
         try:
             data = json.loads(proc.stdout.strip().splitlines()[-1])
-            return True, format_result(action, data)
+            message = format_result(action, data)
+            skill = data.get("skill") or {}
+            if skill.get("state") == "preserved_conflict":
+                message += "\n[警告] 检测到同名或已修改的协作工作流 Skill 目录，已原样保留。"
+            elif skill.get("warning"):
+                message += f"\n[警告] 协作工作流 Skill：{skill['warning']}"
+            return True, message
         except Exception:
             return True, proc.stdout.strip() or "操作完成。"
     detail = (proc.stderr or proc.stdout or "").strip()
@@ -367,7 +380,7 @@ def print_banner(st):
     print(f"  Python 环境  : {st['python_version']}")
     if st["installed"]:
         ver = f"v{st['installed_version']}" if st["installed_version"] and not str(st["installed_version"]).startswith("v") else (st["installed_version"] or "未知")
-        suffix = "（与本包一致）" if st["same_build"] else ""
+        suffix = "（与本包一致）" if st["same_build"] else (f"（原适配 {st['installed_host']}，宿主已更新）" if st.get("host_changed") else "")
         print(f"  当前部署状态 : 已安装 {ver} [{st['installed_build']}]{suffix}")
     else:
         print("  当前部署状态 : 未安装")
@@ -398,7 +411,7 @@ def main(argv=None):
         print_banner(st)
         if not st["app_present"]:
             print("[警告] 未在默认目录找到 Antigravity（%LOCALAPPDATA%\\Programs\\antigravity）。")
-        primary_label = "重新校验/修复本版本" if st["same_build"] else ("升级到此版本" if st["installed"] else "安装此版本")
+        primary_label = "重新校验/修复本版本" if st["same_build"] else ("迁移并适配新版宿主" if st.get("host_changed") else ("升级到此版本" if st["installed"] else "安装此版本"))
         print(f"  [1] {primary_label}")
         print("  [2] 修复损坏或误删的插件文件（repair）")
         print("  [3] 回滚到上一版本（rollback）")
