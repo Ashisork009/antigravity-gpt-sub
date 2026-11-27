@@ -34,7 +34,7 @@ export function panelStore(dir) {
     const meta=existsSync(status)?JSON.parse(readFileSync(direct(status))):{error:'gateway_starting'};
     const rows=(Array.isArray(meta.models)?meta.models:[]).filter(r=>typeof r?.id==='string'&&models.test(r.id))
       .map(r=>({id:r.id,title:typeof r.title==='string'?r.title:r.id,efforts:nativeEfforts(r.efforts)})).filter(r=>valid(r.efforts,efforts));
-    return {prefs,stamp:raw?digest(raw):'default',connected:meta.connected===true,pending:meta.pending===true,fixture:meta.fixture===true,
+    return {prefs,stamp:raw?digest(raw):'default',connected:meta.connected===true,pending:meta.pending===true,refreshing:meta.refreshing===true,fixture:meta.fixture===true,
       error:typeof meta.error==='string'&&/^[A-Za-z0-9_-]{1,100}$/.test(meta.error)?meta.error:null,models:rows,
       revision:typeof meta.revision==='string'?meta.revision:''};
   }
@@ -64,6 +64,14 @@ export function panelStore(dir) {
     const path=join(run,'plan-login.request');direct(path);
     publish(path,{action:'signin',at:Date.now()});return {queued:true};
   }
-  return {snapshot,save,signin};
+  function refreshCatalog() {
+    const state=snapshot();
+    if(state.fixture)throw error('fixture_mode',409);
+    if(!state.connected)throw error('chatgpt_signin_required',409);
+    mkdirSync(run,{recursive:true});
+    const path=join(run,'plan-refresh.request');direct(path);
+    publish(path,{action:'refresh',at:Date.now()});return {queued:true};
+  }
+  return {snapshot,save,signin,refreshCatalog};
 }
 

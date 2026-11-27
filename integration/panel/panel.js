@@ -4,8 +4,9 @@ const defaultModels=['gpt-6.2-sol','gpt-6.2-astra'];
 const defaultEfforts=['low','medium','high','xhigh','max'];
 const labels={low:'Low',medium:'Medium',high:'High',xhigh:'Extra High',max:'Max'};
 const modelLabels={'gpt-6.2-sol':'GPT-6.2 Sol','gpt-6.2-astra':'GPT-6.2 Astra'};
-let state,latest='',busy=false,loading=false,queuedUntil=0,gen=0;
-function notice(text){$('notice').textContent=text;$('notice').hidden=!text;}
+let state,latest='',busy=false,loading=false,queuedUntil=0,refreshUntil=0,gen=0,serverNotice=false;
+const transientErrors=new Set(['catalog_unavailable','catalog_timeout']);
+function notice(text,fromServer=false){$('notice').textContent=text;$('notice').hidden=!text;serverNotice=fromServer&&!!text;}
 async function call(path,data={}){
   const r=await window.sidecar.fetch(path,{method:'POST',body:JSON.stringify(data)});
   const json=await r.json();if(!r.ok)throw Object.assign(Error(json.error||'请求失败'),{status:r.status});return json;
@@ -50,13 +51,22 @@ async function updateSkill(changes){
 }
 function render(s){
   state=s;
-  const sKey=JSON.stringify([s,busy,Date.now()<queuedUntil]);if(latest===sKey)return;latest=sKey;
+  const now=Date.now(),refreshing=Boolean(s.refreshing)||now<refreshUntil;
+  const sKey=JSON.stringify([s,busy,now<queuedUntil,refreshing]);if(latest===sKey)return;latest=sKey;
   renderSkill(s.skill);
-  const wait=s.pending||Date.now()<queuedUntil;
+  const wait=s.pending||now<queuedUntil;
+  const transient=s.connected&&transientErrors.has(s.error);
   $('connection').textContent=s.fixture?'确定性测试模型已连接':wait?'等待系统浏览器完成订阅授权':s.connected?'使用已授权的 ChatGPT 订阅':
     s.error==='gateway_starting'?'正在连接宿主网关':'连接 ChatGPT 后可读取当前订阅支持的模型和等级。';
-  $('signin').hidden=s.fixture||(s.connected&&!s.error&&!wait);$('signin').disabled=busy||wait||s.error==='gateway_starting';
-  if(s.error&&s.error!=='gateway_starting')notice('连接状态：'+s.error);
+  const showSignin=!s.fixture&&!wait&&(!s.connected||(s.error&&s.error!=='gateway_starting'&&!transient));
+  const showRefresh=!s.fixture&&!wait&&s.connected;
+  $('signin').hidden=!showSignin;$('signin').disabled=busy||wait||s.error==='gateway_starting';
+  $('refresh').hidden=!showRefresh;$('refresh').disabled=busy||refreshing||s.error==='gateway_starting';
+  $('refresh').textContent=refreshing?'正在刷新…':'刷新目录';
+  $('conn-actions').hidden=!showSignin&&!showRefresh;
+  if(s.error&&s.error!=='gateway_starting'){
+    notice(transient&&s.models.length?'网络波动，正在后台重试刷新目录（已保留上次模型列表）：'+s.error:'连接状态：'+s.error,true);
+  }else if(serverNotice){notice('');}
   const models=unique([...s.models.map(r=>r.id),...defaultModels,...s.prefs.models]);
   const efforts=unique([...defaultEfforts,...s.models.flatMap(r=>r.efforts),...s.prefs.efforts]);
   $('models').replaceChildren();$('efforts').replaceChildren();
@@ -94,6 +104,11 @@ $('signin').addEventListener('click',async()=>{
   try{busy=true;render(state);await call('/api/signin');queuedUntil=Date.now()+1300;notice('');}
   catch{notice('无法发起授权，请检查插件是否已启用。');}
   finally{busy=false;render(state);}
+});
+$('refresh').addEventListener('click',async()=>{
+  try{busy=true;render(state);await call('/api/refresh');refreshUntil=Date.now()+1500;if(serverNotice)notice('');}
+  catch{notice('无法刷新目录，请检查订阅连接状态。');}
+  finally{busy=false;latest='';render(state);await refresh();}
 });
 for(const g of ['models','efforts'])$(g+'-none').addEventListener('click',()=>void update(g,null,false));
 $('skill-enabled').addEventListener('change',e=>void updateSkill({enabled:e.target.checked}));

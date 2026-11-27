@@ -15,10 +15,23 @@ HERE=Path(__file__).resolve().parent
 ROOT=HERE.parent
 
 def locate_original(desktop, expected_version):
-    candidate = desktop/'resources/app.asar'
-    if candidate.is_file():
-        return candidate
-    raise RuntimeError(f'Desktop archive for Antigravity {expected_version} not found')
+    store = Path.home()/'.antigravity-native-model-router'
+    candidates = [desktop/'resources/app.asar']
+    if store.is_dir():
+        candidates.extend(sorted(store.glob('original-*.asar'), key=lambda p: p.stat().st_mtime, reverse=True))
+    for candidate in candidates:
+        if not candidate.is_file():
+            continue
+        try:
+            pkg = json.loads(read_asar_member(candidate, 'package.json'))
+            if pkg.get('version') != expected_version:
+                continue
+            if b'acquireNativeModelRoute' in read_asar_member(candidate, 'dist/languageServer.js'):
+                continue
+            return candidate
+        except Exception:
+            continue
+    raise RuntimeError(f'Unpatched desktop archive for Antigravity {expected_version} not found')
 
 def read_asar_member(image_path, member):
     data = image_path.read_bytes()

@@ -378,15 +378,23 @@ def check():
             assert json.loads((state/"model-preferences.json").read_bytes())==clean
             assert request("POST","/api/model-preferences",{"prefs":before["prefs"],"stamp":after["stamp"]})[0]==200
             assert request("POST","/api/signin",{})[0]==409 and not (run/"plan-login.request").exists()
-            (run/"plan-panel.json").write_text(json.dumps({"connected":False,"pending":False,"fixture":False,"revision":"synthetic","models":[]}))
+            assert request("POST","/api/refresh",{},False)[0]==401
+            assert request("POST","/api/refresh",{})[0]==409 and not (run/"plan-refresh.request").exists()
+            (run/"plan-panel.json").write_text(json.dumps({"connected":False,"pending":False,"refreshing":False,"fixture":False,"revision":"synthetic","models":[]}))
+            assert request("POST","/api/refresh",{})==(409,{"error":"chatgpt_signin_required"})
             assert request("POST","/api/signin",{})[0]==200
             assert json.loads((run/"plan-login.request").read_bytes())["action"]=="signin"
+            (run/"plan-panel.json").write_text(json.dumps({"connected":True,"pending":False,"refreshing":True,"fixture":False,"revision":"synthetic","models":[{"id":"gpt-6.2-sol","efforts":["high"]}]}))
+            status,connected=request("POST","/api/state",{})
+            assert status==200 and connected["refreshing"] is True
+            assert request("POST","/api/refresh",{})==(200,{"queued":True})
+            assert json.loads((run/"plan-refresh.request").read_bytes())["action"]=="refresh"
         finally:
             if child.poll() is None:child.terminate()
             child.wait(timeout=6)
     return {"scope":"isolated sidecar, production Electron binary, installed SDK, private fixture state",
             "executable":str(desktop),"loader":str(sdk),"auth_guard_status":401,"stale_settings_status":409,
-            "profile_writes":False,"default_and_clear":True,"persistent_restore":True,"login_request":True,
+            "profile_writes":False,"default_and_clear":True,"persistent_restore":True,"login_request":True,"refresh_request":True,
             "skill_auth_guard_status":401,"skill_stale_settings_status":409,"skill_invalid_settings_status":400,
             "skill_state_read_only":True,"skill_fault_isolated":True}
 

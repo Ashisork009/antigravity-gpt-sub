@@ -10,7 +10,7 @@
 
 ## 核心特性
 
-- **原生适配 Antigravity `2.35.2`**：直接在 Antigravity 对话输入框与 Swarm 面板中选择 `codex-gpt-6.2-{sol,astra}-{low,medium,high,xhigh,max}`，内置设置侧边面板自由勾选模型与推理等级。
+- **原生适配 Antigravity `2.35.2`**：直接在 Antigravity 对话输入框与 Swarm 面板中选择 `codex-gpt-6.2-{sol,astra}-{low,medium,high,xhigh,max}`，内置设置侧边面板自由勾选模型、推理等级并支持一键「刷新目录」（`v0.5.3` 起网络/代理短暂抖动不再清空已缓存的模型列表）。
 - **仅校版本号，与汉化补丁完全共存（`v0.5.2` 新增）**：
   - 仅校验 Antigravity 宿主版本号（`2.35.2`）与精准代码注入锚点，不再强校验 `Antigravity.exe`、`language_server.exe`、`app.asar` 的整包哈希；
   - 从本机 `language_server.exe` 动态提取内嵌前端包并仅替换逻辑锚点，`app.asar` 也仅注入 `dist/languageServer.js`——无论先装汉化还是后装汉化，安装、升级、回滚、卸载均 100% 保留原有汉化改动；
@@ -44,7 +44,7 @@
 
 ## 快速安装（推荐直接用发布包）
 
-1. 在 [Releases](https://github.com/Ashisork009/antigravity-gpt-sub/releases) 页面下载 **`antigravity-gpt-sub-v0.5.2-windows.zip`** 并完整解压到本地文件夹。
+1. 在 [Releases](https://github.com/Ashisork009/antigravity-gpt-sub/releases) 页面下载 **`antigravity-gpt-sub-v0.5.3-windows.zip`** 并完整解压到本地文件夹。
 2. 直接双击目录内的 **`双击安装或管理.cmd`**（推荐使用普通用户权限即可）。
 3. 按提示直接回车，脚本会自动关闭 Antigravity、完成部署或从旧宿主版本无缝迁移并重新打开软件。
 4. 重启后打开 **个性化定制 → 已安装插件 → Codex 订阅模型 → UI Plugins → 模型与推理等级 → 在侧边面板中打开**，点击 **Continue with ChatGPT** 在官方页面完成授权即可使用。

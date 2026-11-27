@@ -17,9 +17,9 @@ function publish(path,value){
 const hash=v=>createHash('sha256').update(JSON.stringify(v)).digest('hex');
 
 export async function startDesktopRouter({stateDir,fetch,safeStorage,openExternal,fixture}){
-  const run=join(stateDir,'run'), statusPath=join(run,'plan-panel.json'), request=join(run,'plan-login.request');
+  const run=join(stateDir,'run'), statusPath=join(run,'plan-panel.json'), request=join(run,'plan-login.request'), refreshReq=join(run,'plan-refresh.request');
   mkdirSync(run,{recursive:true});
-  let rows=[], current=preferences(undefined),revision='', gate, listener, busy=false, refreshing=false, retryAt=0,closing=false, listFailures=0;
+  let rows=[], current=preferences(undefined),revision='', gate, listener, busy=false, refreshing=false, refreshTask=null, refreshQueued=false, retryAt=0,closing=false;
   let status={connected:false,authorizationPending:false}, catalogError=null, choicesError=null;
   const diag={mode:fixture?'fixture':'subscription',startedAt:new Date().toISOString(),seq:0,counts:{},recent:[]};
   const record=(kind,meta)=>{
@@ -34,32 +34,38 @@ export async function startDesktopRouter({stateDir,fetch,safeStorage,openExterna
   const plan=fixture ? await fixture(run) : openPlanGateway({stateDir,safeStorage,fetch,openExternal,record,onChange:()=>{retryAt=0;}});
   const display=()=>{
     const rev=hash({current,rows,live:status.connected,choicesError});
-    const visible={connected:status.connected,pending:status.authorizationPending,error:choicesError||catalogError||status.lastError||null,
+    const visible={connected:status.connected,pending:status.authorizationPending,refreshing:Boolean(refreshing),error:choicesError||catalogError||status.lastError||null,
       models:rows.map(r=>({id:r.slug,title:modelTitle(r.slug,r.display_name),efforts:(r.supported_reasoning_levels??[]).map(e=>e.effort)})),revision:rev,fixture:Boolean(fixture)};
     const text=JSON.stringify(visible);
     if(!existsSync(statusPath)||readFileSync(statusPath,'utf8')!==text)publish(statusPath,visible);
     if(rev!==revision){revision=rev;listener?.invalidate?.();}
   };
-  async function refreshModels(){
-    if(refreshing||closing||!status.connected)return;
+  function refreshModels(){
+    if(refreshTask)return refreshTask;
+    if(closing||!status.connected)return Promise.resolve();
     refreshing=true;
-    try{
-      rows=await plan.listModels({signal:AbortSignal.timeout(15000)});
-      catalogError=null;listFailures=0;retryAt=Date.now()+300000;
-    }catch(e){
-      const authRevoked=e?.status===401||e?.status===403||
-        ['chatgpt_reauthorization_required','chatgpt_signin_required','chatgpt_plan_usage_not_granted'].includes(e?.code);
-      listFailures++;
-      if(authRevoked||listFailures>=5)rows=[];
-      catalogError=e.code||'catalog_unavailable';retryAt=Date.now()+15000;
-    }finally{
-      refreshing=false;
-      if(!closing){
-        status=await plan.status().catch(()=>status);
-        if(!status.connected){rows=[];listFailures=0;retryAt=0;}
-        display();
+    display();
+    refreshTask=(async()=>{
+      try{
+        rows=await plan.listModels({signal:AbortSignal.timeout(15000)});
+        catalogError=null;retryAt=Date.now()+300000;
+      }catch(e){
+        const authRevoked=e?.status===401||e?.status===403||
+          ['chatgpt_reauthorization_required','chatgpt_signin_required','chatgpt_plan_usage_not_granted'].includes(e?.code);
+        if(authRevoked)rows=[];
+        catalogError=e?.code||(e?.name==='TimeoutError'||e?.name==='AbortError'?'catalog_timeout':'catalog_unavailable');
+        retryAt=Date.now()+15000;
+      }finally{
+        refreshing=false;refreshTask=null;
+        if(!closing){
+          status=await plan.status().catch(()=>status);
+          if(!status.connected){rows=[];refreshQueued=false;retryAt=0;}
+          else if(refreshQueued){refreshQueued=false;retryAt=0;}
+          display();
+        }
       }
-    }
+    })();
+    return refreshTask;
   }
   async function tick(){
     if(busy||closing)return;busy=true;
@@ -72,8 +78,15 @@ export async function startDesktopRouter({stateDir,fetch,safeStorage,openExterna
           try{await plan.signIn();}catch(e){catalogError=e.code||'signin_unavailable';}
         }
       }
+      if(existsSync(refreshReq)){
+        const cmd=read(refreshReq,{});unlinkSync(refreshReq);
+        if(cmd.action==='refresh'&&Date.now()-cmd.at>=0&&Date.now()-cmd.at<15000&&!fixture){
+          if(refreshing)refreshQueued=true;
+          retryAt=0;
+        }
+      }
       status=await plan.status();
-      if(!status.connected){rows=[];listFailures=0;retryAt=0;}
+      if(!status.connected){rows=[];refreshQueued=false;retryAt=0;}
       else if(Date.now()>=retryAt&&!refreshing){refreshModels().catch(()=>{});}
       if(!closing)display();
     }finally{busy=false;}

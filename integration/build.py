@@ -13,7 +13,7 @@ HERE=Path(__file__).resolve().parent
 SRC=HERE.parent
 OLD=SRC/'vendor/v33-base'
 RELEASES=SRC/'release'
-VERSION='0.5.2'
+VERSION='0.5.3'
 HOST_VERSION='2.35.2'
 def sha(b):return hashlib.sha256(b).hexdigest()
 def put(path,value):

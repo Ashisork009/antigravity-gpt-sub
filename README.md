@@ -10,7 +10,7 @@ No external proxy server, no separate API billing, compatible with third-party l
 
 ## Highlights
 
-- **Native Antigravity `2.35.2` Integration**: Appears directly in Antigravity's model picker and Swarm roster as `codex-gpt-6.2-{sol,astra}-{low,medium,high,xhigh,max}`, with a built-in Settings sidecar panel to toggle models and reasoning levels.
+- **Native Antigravity `2.35.2` Integration**: Appears directly in Antigravity's model picker and Swarm roster as `codex-gpt-6.2-{sol,astra}-{low,medium,high,xhigh,max}`, with a built-in Settings sidecar panel to toggle models, choose reasoning levels, and manually refresh the catalog (`v0.5.3` preserves cached models during transient proxy/network hiccups instead of clearing the picker).
 - **Version-Only Host Verification & Patch Coexistence (`v0.5.2`)**:
   - Verifies Antigravity's version (`2.35.2`) and exact JS injection anchors rather than rigid whole-file hashes on `Antigravity.exe`, `language_server.exe`, or `app.asar`.
   - Dynamically extracts the embedded web bundle from your local `language_server.exe` and injects only `dist/languageServer.js` in `app.asar` — coexisting cleanly with third-party Chinese localization or UI patches across install, upgrade, rollback, and uninstall.
@@ -44,9 +44,9 @@ No external proxy server, no separate API billing, compatible with third-party l
 
 ## Quick Start (Prebuilt Release)
 
-1. Download **`antigravity-gpt-sub-v0.5.2-windows.zip`** from the [Releases](https://github.com/Ashisork009/antigravity-gpt-sub/releases) page and extract the entire archive to a local folder.
+1. Download **`antigravity-gpt-sub-v0.5.3-windows.zip`** from the [Releases](https://github.com/Ashisork009/antigravity-gpt-sub/releases) page and extract the entire archive to a local folder.
 2. Double-click **`双击安装或管理.cmd`** (standard user permissions are recommended).
-3. Press **Enter** to let the installer gracefully close Antigravity, deploy or migrate to `v0.5.2`, and automatically relaunch Antigravity.
+3. Press **Enter** to let the installer gracefully close Antigravity, deploy or migrate to `v0.5.3`, and automatically relaunch Antigravity.
 4. Inside Antigravity, open **Customizations → Installed Plugins → Codex 订阅模型 → UI Plugins → 模型与推理等级 (Open in Side Panel)**, click **Continue with ChatGPT**, and sign in via OpenAI's official OAuth page.
 5. *(Optional)* In the same side panel, toggle **协作工作流 Skill** on and choose **中文** or **English** to mount `gpt-swarm-workflow` globally (takes effect on the next turn).
 

@@ -28,6 +28,7 @@ function endpoint(path,handler) {
 endpoint('/api/state',()=>({...store.snapshot(),skill:safeSkillSnapshot()}));
 endpoint('/api/model-preferences',async data=>({...await store.save(data),skill:safeSkillSnapshot()}));
 endpoint('/api/signin',store.signin);
+endpoint('/api/refresh',store.refreshCatalog);
 endpoint('/api/skill',async data=>{
   const nextSkill=await skills.update(data);
   return {...store.snapshot(),skill:nextSkill};
