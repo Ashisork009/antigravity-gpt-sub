@@ -263,7 +263,18 @@ class SkillStoreTests(unittest.TestCase):
 
 
 def check():
-    desktop=Path(os.environ["LOCALAPPDATA"])/"Programs/antigravity/Antigravity.exe"
+    candidates=[]
+    if os.name=="nt":
+        import winreg
+        for hive in (winreg.HKEY_CURRENT_USER,winreg.HKEY_LOCAL_MACHINE):
+            try:
+                with winreg.OpenKey(hive,r"Software\121a0be4-63bd-531e-acf8-fc3924c7e984") as key:
+                    loc=winreg.QueryValueEx(key,"InstallLocation")[0]
+                if isinstance(loc,str) and loc.strip():candidates.append(Path(loc.strip()))
+            except OSError:continue
+    candidates.append(Path(os.environ["LOCALAPPDATA"])/"Programs/antigravity")
+    desktop=next((c/"Antigravity.exe" for c in candidates if (c/"Antigravity.exe").is_file() and (c/"resources/app.asar").is_file()),
+                 candidates[-1]/"Antigravity.exe")
     sdk=Path.home()/".gemini/antigravity/lib/node_modules/sidecar_sdk/register_loader.js"
     with tempfile.TemporaryDirectory() as tmp, socket.socket() as service:
         service.bind(("127.0.0.1",0))

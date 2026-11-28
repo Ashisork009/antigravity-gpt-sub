@@ -6,25 +6,26 @@ function checkEffortSubmenu(){
   const input=['high','max','low','medium','xhigh'];
   const canonical=['low','medium','high','xhigh','max'];
   const labels={low:'Low',medium:'Medium',high:'High',xhigh:'Extra High',max:'Max',minimal:'Minimal',adaptive:'Adaptive',ultra:'Ultra'};
-  const components=Object.fromEntries(['rW','sW','G5','jW','jJ','rx','mW','nW','kW'].map(name=>[name,name]));
+  const components=Object.fromEntries(['OQ','PQ','EQ','FQ','HQ','KQ','GQ','D5','wjd','iz','XK'].map(name=>[name,name]));
   function render(family,branch,withContext,published=input){
     const options=published.map((level,i)=>({modelId:family+'-'+level,label:family+' ('+labels[level]+')',value:1000+i}));
     const groups={[family]:{displayName:'Example',defaultThinkingSuffix:'medium',
       supportedThinkingLevels:published.map(effort=>({thinkingSuffix:effort,thinkingDisplayName:labels[effort]}))}};
     let choice;
-    const script=group+'\nconst f=lVb(options,groups); (function(){'+branch+'})()';
+    const script=group+'\nconst f=Z8b(options,groups); (function(){'+branch+'})()';
     const result=vm.runInNewContext(script,{...components,options,groups,a:options[0],c:options[3],
-      O:false,N:false,F:'test',n:withContext,D:'context-option',hYb:()=>true,b:option=>{choice=option},
-      E:{createElement:(kind,props,...children)=>({kind,props,children:children.flat()})}});
+      L:false,g:false,P:false,Q:false,q:false,A:undefined,S:null,E:false,I:'test',O:false,U:false,R:()=>{},
+      p:withContext,H:'context-option',J:undefined,Uac:()=>true,wj:(...xs)=>xs.filter(Boolean).join(' '),b:option=>{choice=option},
+      F:{createElement:(kind,props,...children)=>({kind,props,children:children.flat()})}});
     const nodes=[];
     function walk(el){if(!el||typeof el!=='object')return;nodes.push(el);el.children.forEach(walk)}
     walk(result);
     const effortRows=nodes.filter(el=>el.props?.['data-testid']==='model-selector-effort-option');
     const rows=effortRows.map(el=>el.props['data-effort']);
     for(const row of effortRows)assert.equal(row.children[0],labels[row.props['data-effort']]);
-    if(withContext)nodes.find(el=>el.kind==='kW'&&el.props.key==='xhigh').props.onClick();
+    if(withContext)nodes.find(el=>el.kind==='FQ'&&el.props.key==='xhigh').props.onClick();
     else{
-      const menu=nodes.find(el=>el.kind==='mW');
+      const menu=nodes.find(el=>el.kind==='HQ');
       assert.equal(menu.props.value,'medium');
       menu.props.onValueChange('xhigh');
     }
@@ -50,12 +51,12 @@ async function test(){
   const slug='codex-gpt-6.2-sol-medium',native={modelId:'gemini',value:4,label:'Gemini'};
   const restored={modelId:slug,value:72,label:'GPT-6.2 Sol (Medium)'};
   const scope={
-    e: value => value, hl:()=>auth,m:false,b:'cid',n:{},y:false,B:native,uA:{},G:{Model:{UNSPECIFIED:0}},
-    vl:()=>previousConfig,ul:select=>select(state),nm:()=>({stepCount:4}),RB:()=>scope.options,options:[native],
-    E:{useEffect(cb){fn=cb},useContext(){return agent},useState(){return [expired,next=>{expired=next}]}},
-    D:{getState(){return state},dispatch(x){dispatches.push(x)}},
-    bk: () => new Map(), V3b: value => Boolean(value?.email), Z_a: () => undefined, $_a: () => undefined,
-    ara:value=>value, ZB:value=>value, console, vh:class extends Error{},
+    e: value => value, vl:()=>auth,m:false,b:'cid',n:{},y:false,J:false,k:native,bC:{},G:{Model:{UNSPECIFIED:0}},
+    Cl:()=>previousConfig,Bl:select=>select(state),Wo:()=>({stepCount:4}),ED:()=>scope.options,options:[native],
+    F:{useEffect(cb){fn=cb},useContext(){return agent},useState(){return [expired,next=>{expired=next}]}},
+    N:{getState(){return state},dispatch(x){dispatches.push(x)}},
+    lk: () => new Map(), aX: () => false, W3a: () => undefined, V3a: () => undefined, Z3a: value => value,
+    pwa:value=>value, MD:value=>value, ic:value=>value, console, Eh:class extends Error{},
     setTimeout(cb,ms){const timer=()=>cb();timers.set(timer,ms);return timer},clearTimeout(timer){timers.delete(timer)}
   };
   const agent={getUserStatus(){return new Promise(resolve=>replies.push(resolve))}};
@@ -75,6 +76,11 @@ async function test(){
   previousConfig={modelName:slug,planModel:18};render();
   assert.equal(replies.length,5,'restoring a subscription fetches immediately with the picker closed');
   assert.match(button.label,/恢复/);assert.equal(timers.size,7);
+  // When modelSelectorLock is active (J===true), keep the lock label instead of overriding it.
+  scope.J=true;scope.k={label:'Locked model',value:0};render();
+  assert.equal(button.label,'Locked model');assert.equal(timers.size,0);
+  scope.J=false;scope.k=native;render();
+  assert.equal(replies.length,6);assert.match(button.label,/恢复/);
   const cfg={plannerConfig:{planModel:72}},row={plannerConfig:previousConfig};
   const source={trajectorySlice:{generatorMetadatasInSlice:[row],totalStepsLength:4,totalGeneratorMetadataLength:1}};
   const guard=(chosen,request)=>scope.agResumeGuard(source,state,'cid',chosen,request);
@@ -82,15 +88,15 @@ async function test(){
   assert.throws(()=>scope.agResumeGuard(undefined,state,'cid',native,cfg),/历史/);
   const sameOldSlot={modelId:'vendor-native',label:'Native slot',modelOrAlias:{choice:{case:'model',value:18}}};
   const moved={modelId:slug,label:restored.label,modelOrAlias:{choice:{case:'model',value:72}}};
-  assert.equal(scope.chc(source,[sameOldSlot,moved],row).modelLabel,restored.label);
-  assert.equal(scope.chc(source,[sameOldSlot],row).modelLabel,undefined);
-  scope.options=[native,restored];scope.B=restored;render();
+  assert.equal(scope.Hvc(source,[sameOldSlot,moved],row).modelLabel,restored.label);
+  assert.equal(scope.Hvc(source,[sameOldSlot],row).modelLabel,undefined);
+  scope.options=[native,restored];scope.k=restored;render();
   assert.equal(button,restored);assert.equal(timers.size,0);
   assert.doesNotThrow(()=>guard(restored,cfg));
   assert.throws(()=>guard(restored,{plannerConfig:{planModel:18}}),/订阅模型/,'stale slot');
   const beforeNative=replies.length;
   state.modelSelection={trajectorySync:{cid:{pick:{atStep:4}}},byConversation:{cid:{model:4}}};
-  scope.B=native;render();assert.equal(button,native);assert.equal(replies.length,beforeNative);
+  scope.k=native;render();assert.equal(button,native);assert.equal(replies.length,beforeNative);
   assert.doesNotThrow(()=>guard(native,{plannerConfig:{planModel:4}}));
   state.modelSelection.byConversation.cid={model:72,customLabel:slug};scope.options=[native];
   assert.throws(()=>guard(native,{plannerConfig:{planModel:4}}),/订阅模型/);

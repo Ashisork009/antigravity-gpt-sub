@@ -13,10 +13,14 @@ def prepare(source, target):
     start=text.index("import { createHash }")
     end=text.index("export function createCodexBackend(")
     output=text[start:end]+"\nexport { events, chunk, finish, outputParts };\n"
+    before="const cap = 32 * 1024 * 1024;"
+    after="const cap = 256 * 1024 * 1024;"
+    if output.count(before)!=1:
+        raise ValueError("Expected single 32 MiB SSE cap in frozen v3.3 codec")
+    output=output.replace(before,after,1)
     dest=Path(target)
     dest.parent.mkdir(parents=True,exist_ok=True)
     dest.write_text(output,encoding="utf-8",newline="\n")
 
 if __name__=="__main__":
     prepare(*sys.argv[1:])
-

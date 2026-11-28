@@ -111,7 +111,7 @@ def seed_previous_host_deployment(root, store, cfg, app):
 def run(pkg,project,action,journal=None,expect_ok=True):
     program="""from pathlib import Path
 import sys,json
-root=Path(sys.argv[1]);p=root/'app';s=root/'store';c=root/'config'
+root=Path(sys.argv[1]);p=root/'Programs/CustomAntigravity';s=root/'store';c=root/'config'
 import manage
 if hasattr(manage,'Deployment'):
  result=manage.Deployment(p,s,c).action(sys.argv[2],*sys.argv[3:])
@@ -148,13 +148,41 @@ def seed_managed_skill(store, config):
     return target, pref
 
 
+def locate_desktop(expected_version):
+    candidates = []
+    if os.name == 'nt':
+        import winreg
+        for hive in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
+            try:
+                with winreg.OpenKey(hive, r'Software\121a0be4-63bd-531e-acf8-fc3924c7e984') as key:
+                    loc = winreg.QueryValueEx(key, 'InstallLocation')[0]
+                if isinstance(loc, str) and loc.strip():
+                    candidates.append(Path(loc.strip()))
+            except OSError:
+                continue
+    candidates.append(Path(os.environ['LOCALAPPDATA']) / 'Programs/antigravity')
+    for cand in candidates:
+        asar = cand / 'resources/app.asar'
+        if not ((cand / 'Antigravity.exe').is_file() and (cand / 'resources/bin/language_server.exe').is_file() and asar.is_file()):
+            continue
+        try:
+            if json.loads(read_asar_member(asar, 'package.json')).get('version') == expected_version:
+                return cand
+        except Exception:
+            continue
+    for cand in candidates:
+        if (cand / 'Antigravity.exe').is_file() and (cand / 'resources/bin/language_server.exe').is_file():
+            return cand
+    return candidates[-1]
+
+
 def tests(fix,sub,previous_fixture=None):
     results={}
-    desktop=Path(os.environ['LOCALAPPDATA'])/'Programs/antigravity'
     expected_version=json.loads((sub/'release.json').read_bytes())['host']
+    desktop=locate_desktop(expected_version)
     original_src=locate_original(desktop,expected_version)
     with tempfile.TemporaryDirectory(prefix='native-plugin-install-test-') as td:
-        root=Path(td);app=root/'app';store=root/'store';cfg=root/'config';(app/'resources/bin').mkdir(parents=True)
+        root=Path(td);app=root/'Programs/CustomAntigravity';store=root/'store';cfg=root/'config';(app/'resources/bin').mkdir(parents=True)
         for rel in ['Antigravity.exe','resources/bin/language_server.exe']:
             # Copy exact binary bytes without sharing metadata with the installation.
             shutil.copyfile(desktop/rel,app/rel)
@@ -182,8 +210,9 @@ def tests(fix,sub,previous_fixture=None):
         assert digest(image)==orig_sha and not vis.exists() and settings.read_bytes()==orig and not overlay.exists() and not active_overlay.exists()
         results['new_install_repeat_uninstall']=True
 
-        # Host auto-update migration (2.35.1 receipt over localized 2.35.2 desktop):
-        prev_build,prev_overlay,_,_,prev_runtime=seed_previous_host_deployment(root,store,cfg,app)
+        # Host auto-update migration across install directories (default Programs/antigravity -> custom registered dir):
+        old_app=root/'Programs/antigravity'
+        prev_build,prev_overlay,_,_,prev_runtime=seed_previous_host_deployment(root,store,cfg,old_app)
         target,pref=seed_managed_skill(store,cfg)
         original_pref=pref.read_bytes()
         run(sub,root,'rollback',expect_ok=False)

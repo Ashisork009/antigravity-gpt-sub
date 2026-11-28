@@ -4,6 +4,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {Readable} from 'node:stream';
 import test from 'node:test';
+import {gzipSync} from 'node:zlib';
 import {compileCatalog,defaultModels,defaultEfforts,preferences,resolveRoute} from './catalog.mjs';
 import {CatalogStore} from './store.mjs';
 import {listenRoutes} from './serve.mjs';
@@ -111,7 +112,7 @@ test('transactional storage distinguishes missing from intentionally empty, inde
   }finally{db.close();sibling.close();}
 });
 const reply=(obj,statusCode=200)=>Object.assign(Readable.from([Buffer.from(JSON.stringify(obj))]),{statusCode,headers:{'content-type':'application/json'}});
-async function transport(t,behavior) {
+async function transport(t,behavior,extraOptions={}) {
   const state={enabled:true,allowed:true,settings:preferences(),models:caps,catalog:structuredClone(native),gen:[],google:[],catalogCalls:[],events:[]};
   const dir=mkdtempSync(join(tmpdir(),'antigravity-native-router-'));
   const routes=await listenRoutes(dir,async request=>{
@@ -125,7 +126,7 @@ async function transport(t,behavior) {
     return reply({native:true});
   },undefined,{getSettings:()=>state.settings,getModels:()=>state.models,enabled:()=>state.enabled,
     authorizeProbe:()=>state.allowed,record:(kind,meta)=>state.events.push({kind,...meta}),
-    generate:args=>{state.gen.push(args);return behavior(args);}});
+    generate:args=>{state.gen.push(args);return behavior(args);},...extraOptions});
   t.after(()=>{routes.close();rmSync(dir,{recursive:true,force:true});});
   const call=(op,body,who='acct-a',headers={},signal)=>fetch(routes.urls.cloud+'/v1internal:'+op,{method:'POST',signal,
     headers:{'content-type':'application/json','authorization':'Bearer '+who,'x-goog-api-key':'fixture-only-google',...headers},body:JSON.stringify(body)});
@@ -261,4 +262,85 @@ test('native passthrough passes target selector to stripPlanSignatures for Gemin
   assert.deepEqual(seenSelectors,['gemini-3.8-flash-low','claude-sonnet-5-5-low']);
   assert.equal(googleBodies[0].request.contents[0].parts[0].thoughtSignature,'skip_thought_signature_validator');
   assert.equal(googleBodies[1].request.contents[0].parts[0].thoughtSignature,undefined);
+});
+
+test('passes native Gemini requests above 32 MiB (raw and gzip) and returns explicit 413 on raw or decompressed overflow',async t=>{
+  // 1. Default 256 MiB limit accepts a 34 MiB native Gemini payload (both raw and gzip-compressed).
+  const {state,routes}=await transport(t,sample);
+  const largeBlob='A'.repeat(34*1024*1024);
+  const rawPayload=Buffer.from(JSON.stringify({model:'gemini-pro',project:'scope-a',
+    request:{contents:[{role:'user',parts:[{inlineData:{mimeType:'audio/wav',data:largeBlob}}]}]}}));
+  assert.ok(rawPayload.length>34*1024*1024);
+  const rawRes=await fetch(routes.urls.cloud+'/v1internal:streamGenerateContent',{method:'POST',
+    headers:{'content-type':'application/json',authorization:'Bearer acct-a'},body:rawPayload});
+  assert.equal(rawRes.status,200);
+  assert.deepEqual(await rawRes.json(),{native:true});
+  const gzPayload=gzipSync(rawPayload,{level:1});
+  assert.ok(gzPayload.length<2*1024*1024);
+  const gzRes=await fetch(routes.urls.cloud+'/v1internal:streamGenerateContent',{method:'POST',
+    headers:{'content-type':'application/json','content-encoding':'gzip',authorization:'Bearer acct-a'},body:gzPayload});
+  assert.equal(gzRes.status,200);
+  assert.deepEqual(await gzRes.json(),{native:true});
+  assert.equal(state.google.length,2);
+
+  // 2. Exceeding limit returns explicit 413 request_payload_too_large for both raw stream and gzip decompression.
+  const bounded=await transport(t,sample,{maxBody:64*1024});
+  const overRaw=Buffer.from(JSON.stringify({model:'gemini-pro',project:'scope-a',
+    request:{contents:[{role:'user',parts:[{text:'B'.repeat(80*1024)}]}]}}));
+  const r1=await fetch(bounded.routes.urls.cloud+'/v1internal:streamGenerateContent',{method:'POST',
+    headers:{'content-type':'application/json',authorization:'Bearer acct-a'},body:overRaw});
+  assert.equal(r1.status,413);
+  assert.deepEqual(await r1.json(),{error:{code:413,message:'request_payload_too_large'}});
+  const overGz=gzipSync(overRaw);
+  assert.ok(overGz.length<4096);
+  const r2=await fetch(bounded.routes.urls.cloud+'/v1internal:streamGenerateContent',{method:'POST',
+    headers:{'content-type':'application/json','content-encoding':'gzip',authorization:'Bearer acct-a'},body:overGz});
+  assert.equal(r2.status,413);
+  assert.deepEqual(await r2.json(),{error:{code:413,message:'request_payload_too_large'}});
+  assert.equal(bounded.state.events.filter(e=>e.kind==='request_error'&&e.status===413&&e.reason==='request_payload_too_large').length,2);
+});
+
+test('transient fetchAvailableModels 503 and network errors keep active GPT bindings while 401/403 revokes immediately',async t=>{
+  let releaseStream;
+  const {state,catalog,send,call}=await transport(t,async function* (arg){
+    yield* sample(arg);
+    await new Promise(resolve=>{
+      releaseStream=resolve;
+      arg.signal.addEventListener('abort',resolve,{once:true});
+    });
+  });
+  const slug=Object.keys((await catalog()).models).find(x=>x.startsWith('codex-'));
+  const live=await send(slug);
+  const reader=live.body.getReader();
+  const firstChunk=await reader.read();
+  assert.equal(firstChunk.done,false);
+
+  // 503 from Google fetchAvailableModels must NOT kill active GPT stream or clear binding.
+  state.onCatalog=async()=>reply({error:'unavailable'},503);
+  const poll503=await call('fetchAvailableModels',{project:'scope-a'});
+  assert.equal(poll503.status,503);
+  await poll503.text();
+  // Network error from Google fetchAvailableModels must NOT kill active GPT stream or clear binding.
+  state.onCatalog=async()=>{throw new Error('ECONNRESET');};
+  const pollNet=await call('fetchAvailableModels',{project:'scope-a'});
+  assert.equal(pollNet.status,502);
+  await pollNet.text();
+  await new Promise(r=>setTimeout(r,260));
+  releaseStream();
+  let rest='';
+  while(true){const {done,value}=await reader.read();if(done)break;rest+=new TextDecoder().decode(value);}
+  assert.doesNotMatch(rest,/subscription_selection_revoked/);
+
+  // Another GPT request still succeeds using the preserved binding, then 401 revokes immediately.
+  const live2=await send(slug);
+  const reader2=live2.body.getReader();
+  await reader2.read();
+  state.onCatalog=async()=>reply({error:'unauthorized'},401);
+  const poll401=await call('fetchAvailableModels',{project:'scope-a'});
+  assert.equal(poll401.status,401);
+  await poll401.text();
+  let tail2='';
+  while(true){const {done,value}=await reader2.read();if(done)break;tail2+=new TextDecoder().decode(value);}
+  assert.match(tail2,/subscription_selection_revoked/);
+  assert.equal((await send(slug)).status,409);
 });

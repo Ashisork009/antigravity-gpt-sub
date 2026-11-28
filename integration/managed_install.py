@@ -16,7 +16,40 @@ from skill_sync import reconcile_skill
 
 HERE=Path(__file__).resolve().parent
 V33='85408176d923b4f3e9b7'
+APP_GUID='121a0be4-63bd-531e-acf8-fc3924c7e984'
 read=lambda p:json.loads(p.read_bytes())
+
+def registered_app_dirs():
+    if os.name!='nt':return []
+    import winreg
+    found=[]
+    for hive in (winreg.HKEY_CURRENT_USER,winreg.HKEY_LOCAL_MACHINE):
+        try:
+            with winreg.OpenKey(hive,f'Software\\{APP_GUID}') as key:
+                value,_=winreg.QueryValueEx(key,'InstallLocation')
+            if isinstance(value,str) and value.strip():
+                p=Path(value.strip())
+                if not any(os.path.normcase(str(p))==os.path.normcase(str(x)) for x in found):found.append(p)
+        except OSError:continue
+    return found
+
+def find_app_dir(expected_version=None,local_app_data=None,registered=None):
+    local=Path(local_app_data if local_app_data is not None else os.environ.get('LOCALAPPDATA',''))
+    default=local/'Programs/antigravity'
+    reg=list(registered) if registered is not None else ([] if local_app_data is not None else registered_app_dirs())
+    candidates=[]
+    for c in [*reg,default]:
+        if not any(os.path.normcase(str(c))==os.path.normcase(str(x)) for x in candidates):candidates.append(c)
+    complete=[c for c in candidates if (c/'Antigravity.exe').is_file() and (c/'resources/bin/language_server.exe').is_file() and (c/'resources/app.asar').is_file()]
+    if expected_version:
+        for c in complete:
+            try:
+                if core.file_version(c/'Antigravity.exe')==expected_version:return c
+            except Exception:continue
+    if complete:return complete[0]
+    for c in candidates:
+        if (c/'Antigravity.exe').is_file() and (c/'resources/bin/language_server.exe').is_file():return c
+    return default
 def now():return datetime.now(timezone.utc).isoformat()
 def save(p,v):
     core.direct(p)
@@ -131,7 +164,7 @@ class Deployment:
                     time.sleep(.25);continue
                 if kind!='sidecar':raise
                 from orphan_recovery import retire_sidecar
-                retire_sidecar(path,temp);break
+                retire_sidecar(path,temp,self.app);break
         shutil.move(str(temp),str(saved))
     def restore(self,ref,from_spec,from_build,from_image,from_bundle):
         root,snap=self.snapshot(ref);before=snap['receipt'];prior=self.identity(before)
@@ -314,8 +347,20 @@ class Deployment:
                 for empty in sorted(dirs,key=lambda p:len(p.parts),reverse=True)+[path]:
                     if not any(empty.iterdir()):empty.rmdir()
         return {'state':'restored_before_repair','build':self.build,'backup':str(root)}
+    @staticmethod
+    def _is_migrable_install_root(old_root,current_image):
+        old=Path(old_root);cur=Path(current_image)
+        if os.path.normcase(str(old))==os.path.normcase(str(cur)):return True
+        if len(old.parts)<3 or len(cur.parts)<3:return False
+        if tuple(p.lower() for p in old.parts[-2:])!=('resources','app.asar'):return False
+        if tuple(p.lower() for p in cur.parts[-2:])!=('resources','app.asar'):return False
+        old_app=old.parent.parent;cur_app=cur.parent.parent
+        known=[Path(os.environ.get('LOCALAPPDATA',''))/'Programs/antigravity',*registered_app_dirs()]
+        if any(os.path.normcase(str(old_app))==os.path.normcase(str(k)) for k in known):return True
+        return (old_app.parent.name.lower()=='programs'
+                and os.path.normcase(str(old_app.parent))==os.path.normcase(str(cur_app.parent)))
     def verify_host_replaced(self,owned):
-        core.require(owned.get('root')==str(self.image) and owned.get('plugin')==str(self.plugin),'Receipt points at a different installation')
+        core.require(self._is_migrable_install_root(owned.get('root',''),self.image) and owned.get('plugin')==str(self.plugin),'Receipt points at a different installation')
         raw=self.image.read_bytes()
         core.require(core.archive_version(raw)==core.VERSION,f'Archive version differs from supported Antigravity {core.VERSION}')
         items=self.prior_items(owned)
@@ -423,7 +468,7 @@ def main():
     cli.add_argument('action',choices=['install','repair','undo-repair','preview','upgrade','uninstall','rollback'])
     cli.add_argument('--journal',type=Path,help='Backup directory printed by repair, for undo-repair')
     args=cli.parse_args()
-    app=Path(os.environ['LOCALAPPDATA'])/'Programs/antigravity'
+    app=find_app_dir(core.VERSION)
     dep=Deployment(app,Path.home()/'.antigravity-native-model-router',Path.home()/'.gemini/config')
     print(json.dumps(dep.action(args.action,args.journal),ensure_ascii=True))
 

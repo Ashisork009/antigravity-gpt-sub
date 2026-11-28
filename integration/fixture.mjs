@@ -43,7 +43,7 @@ export async function openFixture(run){
     try{
       if(req.method!=='POST'||req.url!=='/responses'||req.headers.origin)throw Error('bad request');
       let count=0;const chunks=[];
-      for await(const chunk of req){count+=chunk.length;if(count>32*1024*1024)throw Error('oversize');chunks.push(chunk);}
+      for await(const chunk of req){count+=chunk.length;if(count>256*1024*1024)throw Error('oversize');chunks.push(chunk);}
       const wire=JSON.parse(Buffer.concat(chunks));
       if(!rows.some(r=>r.slug===wire.model)||!levels.includes(wire.reasoning?.effort))throw Error('invalid selection');
       const id=randomUUID(),action=trialAction(wire,id);

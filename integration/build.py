@@ -13,8 +13,8 @@ HERE=Path(__file__).resolve().parent
 SRC=HERE.parent
 OLD=SRC/'vendor/v33-base'
 RELEASES=SRC/'release'
-VERSION='0.5.3'
-HOST_VERSION='2.35.2'
+VERSION='0.6.0'
+HOST_VERSION='2.36.0'
 def sha(b):return hashlib.sha256(b).hexdigest()
 def put(path,value):
     path.parent.mkdir(parents=True,exist_ok=True)
@@ -69,8 +69,9 @@ def replace_member(original,source):
 """
 
 def populate(target,fixture):
-    for filename in ('asar_tools.py','sidecar_config.py','project_owner.py','orphan_recovery.py'):
+    for filename in ('asar_tools.py','sidecar_config.py','project_owner.py'):
         cp(OLD/filename,target/filename)
+    cp(HERE/'orphan_recovery.py',target/'orphan_recovery.py')
     core=(OLD/'manage.py').read_text(encoding='utf8')
     core=once(core,"VERSION='2.35.1'",f"VERSION='{HOST_VERSION}'")
     core=once(core,"MEMBER='dist/languageServer.js'","MEMBER='dist/languageServer.js'\n\n"+VERSION_HELPERS)
@@ -196,6 +197,16 @@ def populate(target,fixture):
             enable_sidecar(config,owned['enrollment'],True)
             compare_swap(image,orig_sha,candidate)
             return 'Installed '+build""")
+    core=once(core,"""    app=local/'Programs/antigravity'""",
+        """    app=local/'Programs/antigravity'
+    if not (app/'resources/app.asar').is_file() and os.name=='nt':
+        import winreg
+        for hive in (winreg.HKEY_CURRENT_USER,winreg.HKEY_LOCAL_MACHINE):
+            try:
+                with winreg.OpenKey(hive,r'Software\\121a0be4-63bd-531e-acf8-fc3924c7e984') as k:
+                    cand=Path(winreg.QueryValueEx(k,'InstallLocation')[0].strip())
+                if (cand/'resources/app.asar').is_file():app=cand;break
+            except OSError:continue""")
     core=once(core,"""        require(file_hash(direct(app/'Antigravity.exe'))==EXE and file_hash(direct(app/'resources/bin/language_server.exe'))==LANG,
                 'Unknown desktop binaries; refusing to modify or restore any installation')""",
         """        require(file_version(app/'Antigravity.exe')==VERSION and direct(app/'resources/bin/language_server.exe').is_file(),
@@ -234,7 +245,10 @@ def populate(target,fixture):
         for name in names:put(run/folder/name,(SRC/folder/name).read_text(encoding='utf8'))
     old_runtime=OLD/'runtime/restart2351/router'
     subprocess.run([sys.executable,'-B',str(SRC/'subscription/prepare_codec.py'),str(old_runtime/'codex/backend.mjs'),str(code/'router/codex/backend.mjs')],check=True)
-    gate_src=once((old_runtime/'lease/gate.mjs').read_text(encoding='utf8'),"export const appVersion = '2.35.1';",f"export const appVersion = '{HOST_VERSION}';")
+    sidecar_src=HERE/'sidecar'
+    gate_src=(sidecar_src/'gate.mjs').read_text(encoding='utf8')
+    if f"export const appVersion = '{HOST_VERSION}';" not in gate_src:
+        raise ValueError(f'integration/sidecar/gate.mjs appVersion does not match HOST_VERSION {HOST_VERSION}')
     put(code/'router/lease/gate.mjs',gate_src)
     vendor=(old_runtime/'desktop_runtime.mjs').read_text(encoding='utf8')
     section=vendor[vendor.index('const vendorHosts'):vendor.index('function cockpitKey')]
@@ -267,32 +281,11 @@ def populate(target,fixture):
                 fixture:(await import(require('node:url').pathToFileURL(path.join(runtime,'restart2351','fixture.mjs')).href)).openFixture,"""
     fragment=once(fragment,'stateDir:base,','stateDir:base,\n                '+additions)
     put(target/'host_fragment.cjs',fragment)
-    shutil.copytree(OLD/'sidecar',target/'sidecar')
-    put(target/'sidecar/gate.mjs',once((target/'sidecar/gate.mjs').read_text(encoding='utf8'),"export const appVersion = '2.35.1';",f"export const appVersion = '{HOST_VERSION}';"))
-    verify_ps=(target/'sidecar/verify-host.ps1').read_text(encoding='utf8')
-    verify_ps=once(verify_ps,"$lsDigest = '73CE9A2405B455A93D1F13DB2AE555DA50406110217A349B6DD85C377FBDB9D1'\n","")
-    verify_ps=once(verify_ps,"""if ((Get-Item -LiteralPath $appPath).VersionInfo.FileVersion -ne '2.35.1' -or
-    (Get-FileHash -Algorithm SHA256 -LiteralPath $lsPath).Hash -ne $lsDigest) { throw 'Unsupported build' }""",
-        f"if ((Get-Item -LiteralPath $appPath).VersionInfo.FileVersion -ne '{HOST_VERSION}') {{ throw 'Unsupported build' }}")
-    put(target/'sidecar/verify-host.ps1',verify_ps)
-    renewal=target/'sidecar/renew.mjs'
-    renew=renewal.read_text(encoding='utf8')
-    read_rev="""function panelRevision() {
-  try {
-    const file=join(homedir(),'.antigravity-native-model-router','run','plan-panel.json');
-    const rev=JSON.parse(readFileSync(file,'utf8')).revision;
-    return typeof rev==='string' && /^[a-f0-9]{64}$/i.test(rev) ? rev : 'initial';
-  } catch { return 'initial'; }
-}
-"""
-    renew=once(renew,'async function renew() {',read_rev+'\nasync function renew() {')
-    for v in ['0','1']:
-        renew=once(renew,"updates.update(active.epoch+':"+v+"')","updates.update(active.epoch+':'+panelRevision()+':"+v+"')")
-    put(renewal,renew)
-    control=target/'sidecar/control.mjs'
-    value=control.read_text(encoding='utf8')
-    if value.count("epoch:current.slice(0,-2)")!=2:raise ValueError('Unexpected refresh control format')
-    put(control,value.replace("epoch:current.slice(0,-2)","epoch:current.split(':')[0],revision:current.split(':')[1]"))
+    verify_ps=(sidecar_src/'verify-host.ps1').read_text(encoding='utf8')
+    if f"VersionInfo.FileVersion -ne '{HOST_VERSION}'" not in verify_ps:
+        raise ValueError(f'integration/sidecar/verify-host.ps1 FileVersion does not match HOST_VERSION {HOST_VERSION}')
+    for filename in ('control.mjs','gate.mjs','inspect_owner.mjs','owner_lifetime.mjs','renew.mjs','sidecar.json','verify-host.ps1'):
+        put(target/'sidecar'/filename,(sidecar_src/filename).read_text(encoding='utf8'))
     plugin=json.loads((OLD/'plugin/plugin.json').read_bytes())
     plugin.update(version=VERSION,display_name='Codex 订阅模型',description='在 Antigravity 原生对话中选择订阅模型和推理等级。')
     if fixture:plugin['display_name']+='（确定性验收）'

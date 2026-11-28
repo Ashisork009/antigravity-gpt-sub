@@ -5,7 +5,7 @@ import {once} from 'node:events';
 import {pipeline} from 'node:stream/promises';
 import {resolveRoute,modelCapabilities,preferences} from './catalog.mjs';
 import {CatalogStore} from './store.mjs';
-import {collect,readJson,forGoogle,callGoogle,error,cloudHost,apiHost} from './transport.mjs';
+import {collect,readJson,forGoogle,callGoogle,error,cloudHost,apiHost,maxBody} from './transport.mjs';
 
 const legacy=new Set(['local-codex-subscription','native-model-probe']);
 const headerNames=['content-type','content-encoding','retry-after','cache-control','www-authenticate'];
@@ -13,8 +13,8 @@ const wireFields=['contents','tools','toolConfig','generationConfig','systemInst
   'tool_config','generation_config','system_instruction','safety_settings'];
 const safeReasons=new Set(['subscription_selection_unavailable','conflicting_selectors','expected_native_model_slug',
   'ambiguous_model_identity','unbound_subscription_selection','subscription_backend_unavailable','invalid_model_request',
-  'subscription_selection_revoked','subscription_rate_limited','unsupported_reasoning_effort','subscription_not_authenticated',
-  'subscription_rejected','model_inference_failed','legacy_model_unavailable','only_native_language_service']);
+  'request_payload_too_large','subscription_selection_revoked','subscription_rate_limited','unsupported_reasoning_effort',
+  'subscription_not_authenticated','subscription_rejected','model_inference_failed','legacy_model_unavailable','only_native_language_service']);
 const fail=(status,reason)=>Object.assign(error(status,reason),{reason});
 const safeId=id=>typeof id==='string'&&/^[\w.-]{1,190}$/.test(id)?id:null;
 function errorReason(cause) {
@@ -25,7 +25,7 @@ function endError(res,cause) {
   if(res.destroyed||res.writableEnded)return;
   const status=Number(cause?.status??cause?.statusCode);
   const code=Number.isInteger(status)&&status>=400&&status<=599?status:502;
-  const fallback=code===429?'subscription_rate_limited':[401,403].includes(code)?'subscription_not_authenticated':
+  const fallback=code===413?'request_payload_too_large':code===429?'subscription_rate_limited':[401,403].includes(code)?'subscription_not_authenticated':
     code===400||code===422?'subscription_rejected':code===503?'subscription_backend_unavailable':'model_inference_failed';
   const message=errorReason(cause)??fallback;
   const data=JSON.stringify({error:{code,message}});
@@ -91,6 +91,7 @@ export async function listenRoutes(runDir,vendor=callGoogle,previous,options={})
     if(typeof options[k]!=='function')throw Error('Missing model router callback '+k);
   }
   const ports=requestedPorts(previous);
+  const bodyLimit=Number.isSafeInteger(options.maxBody)&&options.maxBody>0?options.maxBody:maxBody;
   const store=options.store??new CatalogStore(join(runDir,'native-model-catalog.sqlite'));
   const record=options.record??(()=>{});
   const key=randomBytes(32),bindings=new Map(),active=new Set(),servers=[],urls={};
@@ -180,8 +181,8 @@ export async function listenRoutes(runDir,vendor=callGoogle,previous,options={})
       const route=routeFor(req.url.split('?')[0],listener);
       meta={listener,operation:route.operation};
       const inspect=(route.catalog||route.gen)&&req.method==='POST';
-      let bytes=inspect?await collect(req):undefined,rebuilt=false;
-      const parsed=bytes&&readJson(bytes,req.headers['content-encoding']);
+      let bytes=inspect?await collect(req,bodyLimit):undefined,rebuilt=false;
+      const parsed=bytes&&readJson(bytes,req.headers['content-encoding'],bodyLimit);
       const credential=req.headers.authorization??req.headers['x-goog-api-key'];
       const project=typeof parsed?.project==='string'?parsed.project:'';
       scope=credential?createHmac('sha256',key).update(JSON.stringify([credential,project])).digest('hex'):'';
@@ -255,10 +256,10 @@ export async function listenRoutes(runDir,vendor=callGoogle,previous,options={})
         if(added)delete headers['content-encoding'];
         res.writeHead(200,headers);res.end(added?JSON.stringify(state.catalog):raw);return;
       }
-      if(route.catalog&&scope&&pendingCatalogs.get(scope)===order){bindings.delete(scope);invalidate();}
+      if(route.catalog&&scope&&pendingCatalogs.get(scope)===order&&(up.statusCode===401||up.statusCode===403)){bindings.delete(scope);invalidate();}
       res.writeHead(up.statusCode,headers);await pipeline(up,res);
     }catch(err){
-      if(order!==undefined&&pendingCatalogs.get(scope)===order){bindings.delete(scope);invalidate();}
+      if(order!==undefined&&pendingCatalogs.get(scope)===order&&(err?.status===401||err?.status===403)){bindings.delete(scope);invalidate();}
       const cause=signal.reason?.reason?signal.reason:err;
       record(local?'model_error':'request_error',{...meta,status:cause.status??502,cancelled:signal.aborted,
         ...(errorReason(cause)?{reason:errorReason(cause)}:{})});

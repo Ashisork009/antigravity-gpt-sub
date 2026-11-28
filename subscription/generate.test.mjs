@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import {after,before,test} from 'node:test';
-import {copyFile,mkdir,mkdtemp,rm} from 'node:fs/promises';
+import {copyFile,mkdir,mkdtemp,readFile,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
@@ -233,6 +233,12 @@ test('generic media types require a valid event stream and structured upstream f
   await assert.rejects(run('<!doctype html>','text/html'),{code:'subscription_expected_sse_received_html'});
   await assert.rejects(run(JSON.stringify({error:{code:'subscription_sharing_usage_unavailable'}}),'application/json'),{status:503});
 });
+test('prepared Responses SSE codec enforces 256 MiB cap instead of 32 MiB',async()=>{
+  const codecSource=await readFile(join(dir,'restart2351/router/codex/backend.mjs'),'utf8');
+  assert.ok(codecSource.includes('const cap = 256 * 1024 * 1024;'));
+  assert.ok(!codecSource.includes('const cap = 32 * 1024 * 1024;'));
+});
+
 test('failed, truncated and unknown calls do not produce a terminal success',async()=>{
   for (const [seq,code] of [[[{type:'response.failed'}],'subscription_generation_failed'],
     [[{type:'response.output_text.delta',item_id:'x',delta:'x'}],'subscription_stream_ended_without_status'],

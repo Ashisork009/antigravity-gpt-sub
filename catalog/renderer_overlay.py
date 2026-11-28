@@ -7,13 +7,13 @@ import struct
 import tempfile
 import zipfile
 
-ANCHOR = b"m=O.isModelSelectorOpen;var P=O.setIsModelSelectorOpen;O=Y3b();"
-EFFORT_ANCHOR = b"var Q=oVb(a,f);"
-HELPER_ANCHOR = b"function chc(a,b,c=bhc(a?.trajectorySlice?.generatorMetadatasInSlice),d=!1)"
+ANCHOR = b"m=U.isModelSelectorOpen;var V=U.setIsModelSelectorOpen;U=Hhc();"
+EFFORT_ANCHOR = b"var V=L?void 0:ZW(a,f),X=V&&!g?V.efforts:[],"
+HELPER_ANCHOR = b"function Hvc(a,b,c=Gvc(a?.trajectorySlice?.generatorMetadatasInSlice),d=!1)"
 RESOLVE_ANCHOR = b"a=b?.find(k=>{var l=k.modelOrAlias;return l?g!==void 0?"
-LABEL_ANCHOR = b"E.createElement(Vdd,{placement:a,selectedModel:B,setSelectedModel:I"
-SEND_ANCHOR = b"ya=nm(ka,oa.cascadeId);l&&A&&!ta&&xa===oa.cascadeId"
-PICK_ANCHOR = b"customLabel:ba.isCustom?ba.label:void 0,contextWindow:Z,pick:"
+LABEL_ANCHOR = b"F.createElement(Ljd,{placement:a,selectedModel:k,setSelectedModel:Q"
+SEND_ANCHOR = b"fa=Wo(ta,ia.cascadeId);m&&B&&!ma&&za===ia.cascadeId"
+PICK_ANCHOR = b"customLabel:qa.isCustom?qa.label:void 0,contextWindow:ja,pick:"
 HELPERS = """
 function agResumeSlug(value){
   if(typeof value!=="string")return;
@@ -28,7 +28,7 @@ function agResumeSlug(value){
   if(match&&match[1].length<=151&&match[1].includes("-"))return value;
 }
 function agResumeMetadata(agent){
-  return bhc(agent?.trajectorySlice?.generatorMetadatasInSlice)?.plannerConfig;
+  return Gvc(agent?.trajectorySlice?.generatorMetadatasInSlice)?.plannerConfig;
 }
 function agResumeExpected(metadata,state,cid){
   if(!cid)return;
@@ -37,54 +37,54 @@ function agResumeExpected(metadata,state,cid){
   return agResumeSlug(metadata?.modelName);
 }
 function agResumeGuard(agent,state,cid,choice,config){
-  const slice=agent?.trajectorySlice,latest=bhc(slice?.generatorMetadatasInSlice);
-  if(!state.modelSelection?.trajectorySync?.[cid]?.pick&&nm(state,cid)?.stepCount>1&&
+  const slice=agent?.trajectorySlice,latest=Gvc(slice?.generatorMetadatasInSlice);
+  if(!state.modelSelection?.trajectorySync?.[cid]?.pick&&Wo(state,cid)?.stepCount>1&&
      !latest&&(!slice?.totalStepsLength||slice.totalGeneratorMetadataLength>0))
     throw Error("会话历史仍在加载。可在载入后重试，输入内容已保留。");
   const expected=agResumeExpected(latest?.plannerConfig,state,cid);
   if(!expected)return;
-  const option=RB(state).find(row=>row.modelId===expected&&!row.disabled);
+  const option=ED(state).find(row=>row.modelId===expected&&!row.disabled);
   if(!option||choice?.modelId!==expected||config?.plannerConfig?.planModel!==option.value)
     throw Error("已选订阅模型尚不可用，输入内容已保留。请等待模型恢复，或在模型菜单中明确另选模型。");
 }
 """.encode()
-# The native composer maps Q.efforts directly to submenu rows. Only reorder our
+# The native composer maps V.efforts directly to submenu rows. Only reorder our
 # own namespace, keeping the host's original byEffort map and selected enum.
 EFFORT_HOOK = b"""
-if(Q){
-  const family=VV(a,f);
+if(V){
+  const family=YW(a,f);
   if(typeof family==="string"&&/^codex-[a-z0-9][a-z0-9._-]*$/.test(family)&&a.modelId?.startsWith(family+"-")){
-    const order=["none","minimal",...eVb],visible=Q.efforts.filter(effort=>effort.toLowerCase()!=="ultra");
-    Q={...Q,efforts:[...order.filter(effort=>visible.includes(effort)),...visible.filter(effort=>!order.includes(effort))]};
+    const order=["none","minimal",...R8b],visible=V.efforts.filter(effort=>effort.toLowerCase()!=="ultra");
+    V={...V,efforts:[...order.filter(effort=>visible.includes(effort)),...visible.filter(effort=>!order.includes(effort))]};
   }
 }
 """
-# Ydd is the original native model button. D is its existing Redux store.
-# W3b updates model state through the native service and default filtering.
+# Pjd is the original native model button. N is its existing Redux store.
+# Fhc updates model state through the native service and default filtering.
 HOOK = """
-const catalogService=(0,E.useContext)(uA),catalogGeminiOnly=bk().get("models")?.geminiModelsOnly===true;
-const catalogMetadata=vl(n,{selector:agResumeMetadata});
-const catalogExpected=ul(state=>y?void 0:agResumeExpected(catalogMetadata,state,b));
-const catalogMissing=catalogExpected&&B?.modelId!==catalogExpected?catalogExpected:void 0;
-const [catalogExpired,setCatalogExpired]=(0,E.useState)(false);
-const catalogButton=catalogMissing?{label:catalogExpired?"已选订阅模型暂不可用":"正在恢复订阅模型"}:B;
-(0,E.useEffect)(()=>{
+const catalogService=(0,F.useContext)(bC),catalogGeminiOnly=lk().get("models")?.geminiModelsOnly===true;
+const catalogMetadata=Cl(n,{selector:agResumeMetadata});
+const catalogExpected=Bl(state=>y?void 0:agResumeExpected(catalogMetadata,state,b));
+const catalogMissing=!J&&catalogExpected&&k?.modelId!==catalogExpected?catalogExpected:void 0;
+const [catalogExpired,setCatalogExpired]=(0,F.useState)(false);
+const catalogButton=catalogMissing?{label:catalogExpired?"已选订阅模型暂不可用":"正在恢复订阅模型"}:k;
+(0,F.useEffect)(()=>{
   setCatalogExpired(false);
   if((!m&&!catalogMissing)||!catalogService)return;
-  const auth=hl(D.getState());
+  const auth=vl(N.getState());
   if(auth?.state==="signedOut")return;
   let disposed=false,sequence=0;
   const refresh=()=>{
-    if(disposed||hl(D.getState())!==auth)return;
+    if(disposed||vl(N.getState())!==auth)return;
     const request=++sequence;
-    void W3b({agentService:catalogService,store:D,geminiModelsOnly:catalogGeminiOnly,
-      isDisposed:()=>disposed||request!==sequence||hl(D.getState())!==auth,ifFetchFails:"keepStatus"});
+    void Fhc({agentService:catalogService,store:N,geminiModelsOnly:catalogGeminiOnly,
+      isDisposed:()=>disposed||request!==sequence||vl(N.getState())!==auth,ifFetchFails:"keepStatus"});
   };
   refresh();
   const timers=(catalogMissing?[400,1200,2500,5000,10000,20000]:[2500]).map(delay=>setTimeout(refresh,delay));
   if(catalogMissing)timers.push(setTimeout(()=>{if(!disposed)setCatalogExpired(true)},24000));
   return ()=>{disposed=true;timers.forEach(clearTimeout)};
-},[m,b,catalogMissing,catalogService,catalogGeminiOnly,D]);
+},[m,b,catalogMissing,catalogService,catalogGeminiOnly,N]);
 """.encode()
 
 
@@ -138,10 +138,10 @@ def overlay_edits():
         (HELPER_ANCHOR, HELPERS + HELPER_ANCHOR),
         (RESOLVE_ANCHOR, b"a=agResumeSlug(f)?b?.find(k=>k.modelId===f&&!k.disabled):" + RESOLVE_ANCHOR[2:]),
         (ANCHOR, ANCHOR + HOOK),
-        (EFFORT_ANCHOR, EFFORT_ANCHOR + EFFORT_HOOK),
-        (LABEL_ANCHOR, LABEL_ANCHOR.replace(b"selectedModel:B", b"selectedModel:catalogButton")),
-        (PICK_ANCHOR, PICK_ANCHOR.replace(b":void 0,", b":agResumeSlug(ba.modelId),")),
-        (SEND_ANCHOR, SEND_ANCHOR.replace(b";l&&", b";if(b===oa.cascadeId&&!c&&!k&&!ta)agResumeGuard(v(b)?.getState(),ka,b,p,oa.cascadeConfig);l&&")),
+        (EFFORT_ANCHOR, b"var V=L?void 0:ZW(a,f);" + EFFORT_HOOK + b"var X=V&&!g?V.efforts:[]," ),
+        (LABEL_ANCHOR, LABEL_ANCHOR.replace(b"selectedModel:k", b"selectedModel:catalogButton")),
+        (PICK_ANCHOR, PICK_ANCHOR.replace(b":void 0,", b":agResumeSlug(qa.modelId),")),
+        (SEND_ANCHOR, SEND_ANCHOR.replace(b";m&&", b";if(b===ia.cascadeId&&!c&&!k&&!ma)agResumeGuard(w(b)?.getState(),ta,b,q,ia.cascadeConfig);m&&")),
     ]
 
 

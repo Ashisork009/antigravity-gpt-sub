@@ -9,7 +9,28 @@ import unittest
 import zipfile
 import renderer_overlay as overlay
 
-LS = Path(os.environ["LOCALAPPDATA"]) / "Programs/Antigravity/resources/bin/language_server.exe"
+
+def find_language_server():
+    candidates = []
+    if os.name == "nt":
+        import winreg
+        for hive in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
+            try:
+                with winreg.OpenKey(hive, r"Software\121a0be4-63bd-531e-acf8-fc3924c7e984") as key:
+                    loc = winreg.QueryValueEx(key, "InstallLocation")[0]
+                if isinstance(loc, str) and loc.strip():
+                    candidates.append(Path(loc.strip()))
+            except OSError:
+                continue
+    candidates.append(Path(os.environ["LOCALAPPDATA"]) / "Programs/antigravity")
+    for root in candidates:
+        cand = root / "resources/bin/language_server.exe"
+        if cand.is_file() and (root / "resources/app.asar").is_file():
+            return cand
+    return candidates[0] / "resources/bin/language_server.exe"
+
+
+LS = find_language_server()
 
 
 class OverlayTests(unittest.TestCase):
@@ -37,19 +58,19 @@ class OverlayTests(unittest.TestCase):
                 js = out_dir / "main.js"
                 js.write_bytes(transformed)
                 subprocess.run(["node", "--check", str(js)], check=True, capture_output=True)
-                orig_fn = original.split(b"async function W3b(", 1)[1].split(b"function X3b()", 1)[0]
+                orig_fn = original[original.index(b"function Ehc("):original.index(b"function Ghc(")]
 
                 def picker_branch(data):
-                    start = data.index(overlay.EFFORT_ANCHOR)
-                    end = data.index(b'return E.createElement(kW,{"data-testid":"model-selector-item"', start)
+                    start = data.index(b"var V=L?void 0:ZW(a,f)")
+                    end = data.index(b"};var zjd=", start)
                     return data[start:end].decode()
 
-                group = original[original.index(b"const eVb="):original.index(b"function rVb(")].decode()
-                history = transformed[transformed.index(b"function bhc("):transformed.index(b"function dhc(")]
+                group = original[original.index(b"const R8b="):original.index(b"function f9b(")].decode()
+                history = transformed[transformed.index(b"function Gvc("):transformed.index(b"function Ivc(")]
                 payload = {
                     "hook": overlay.HOOK.decode(),
                     "history": history.decode(),
-                    "status": "async function W3b(" + orig_fn.decode(),
+                    "status": orig_fn.decode(),
                     "group": group,
                     "before": picker_branch(original),
                     "after": picker_branch(transformed),

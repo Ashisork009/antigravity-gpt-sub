@@ -59,6 +59,26 @@ class LauncherTests(unittest.TestCase):
         self.assertIn("卸载完成", launcher.format_result("uninstall", {"state": "uninstalled"}))
         self.assertIn("预览校验通过", launcher.format_result("preview", {"build": "b1", "candidate": "sha"}))
 
+    def test_app_dir_resolves_registered_custom_install_and_version_match(self):
+        with tempfile.TemporaryDirectory() as td:
+            local = Path(td)
+            default = local / "Programs/antigravity"
+            (default / "resources/bin").mkdir(parents=True)
+            (default / "Antigravity.exe").write_bytes(b"MZ")
+            (default / "resources/bin/language_server.exe").write_bytes(b"MZ")
+            custom = local / "Programs/CustomAntigravity"
+            (custom / "resources/bin").mkdir(parents=True)
+            (custom / "Antigravity.exe").write_bytes(b"MZ")
+            (custom / "resources/bin/language_server.exe").write_bytes(b"MZ")
+            (custom / "resources/app.asar").write_bytes(b"ASAR")
+            self.assertEqual(launcher.app_dir(local_app_data=local, registered=[custom]), custom)
+            # When both are complete, version match wins.
+            (default / "resources/app.asar").write_bytes(b"ASAR")
+            with mock.patch.object(launcher, "_exe_version", side_effect=lambda p: "2.35.2" if "CustomAntigravity" in str(p) else "2.36.0"):
+                self.assertEqual(launcher.app_dir(expected_host="2.36.0", local_app_data=local, registered=[custom]), default)
+            # Without custom registration, default path is returned.
+            self.assertEqual(launcher.app_dir(local_app_data=local), default)
+
     def test_list_target_processes_handles_single_dict_and_list(self):
         app = Path(r"C:\Users\demo\AppData\Local\Programs\antigravity")
         single = {

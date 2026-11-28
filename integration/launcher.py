@@ -20,8 +20,82 @@ def is_admin():
         return False
 
 
-def app_dir():
-    return Path(os.environ.get("LOCALAPPDATA", "")) / "Programs/antigravity"
+APP_GUID = "121a0be4-63bd-531e-acf8-fc3924c7e984"
+
+
+def registered_app_dirs():
+    if os.name != "nt":
+        return []
+    import winreg
+    found = []
+    for hive in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
+        try:
+            with winreg.OpenKey(hive, f"Software\\{APP_GUID}") as key:
+                value, _ = winreg.QueryValueEx(key, "InstallLocation")
+            if isinstance(value, str) and value.strip():
+                path = Path(value.strip())
+                if not any(_norm_path(path) == _norm_path(existing) for existing in found):
+                    found.append(path)
+        except OSError:
+            continue
+    return found
+
+
+def _exe_version(path):
+    if os.name != "nt":
+        return None
+    try:
+        p = str(Path(path).resolve())
+        ver = ctypes.WinDLL("version", use_last_error=True)
+        size = ver.GetFileVersionInfoSizeW(p, None)
+        if not size:
+            return None
+        buf = ctypes.create_string_buffer(size)
+        if not ver.GetFileVersionInfoW(p, 0, size, buf):
+            return None
+        ptr = ctypes.c_void_p()
+        length = wintypes.UINT()
+        if not ver.VerQueryValueW(buf, "\\", ctypes.byref(ptr), ctypes.byref(length)):
+            return None
+
+        class VS_FIXEDFILEINFO(ctypes.Structure):
+            _fields_ = [
+                ("dwSignature", wintypes.DWORD),
+                ("dwStrucVersion", wintypes.DWORD),
+                ("dwFileVersionMS", wintypes.DWORD),
+                ("dwFileVersionLS", wintypes.DWORD),
+            ]
+
+        info = VS_FIXEDFILEINFO.from_address(ptr.value)
+        return f"{info.dwFileVersionMS >> 16}.{info.dwFileVersionMS & 0xffff}.{info.dwFileVersionLS >> 16}"
+    except Exception:
+        return None
+
+
+def app_dir(expected_host=None, local_app_data=None, registered=None):
+    local = Path(local_app_data if local_app_data is not None else os.environ.get("LOCALAPPDATA", ""))
+    default = local / "Programs/antigravity"
+    reg = list(registered) if registered is not None else ([] if local_app_data is not None else registered_app_dirs())
+    candidates = []
+    for c in [*reg, default]:
+        if not any(_norm_path(c) == _norm_path(existing) for existing in candidates):
+            candidates.append(c)
+    complete = [
+        c for c in candidates
+        if (c / "Antigravity.exe").is_file()
+        and (c / "resources/bin/language_server.exe").is_file()
+        and (c / "resources/app.asar").is_file()
+    ]
+    if expected_host:
+        for c in complete:
+            if _exe_version(c / "Antigravity.exe") == expected_host:
+                return c
+    if complete:
+        return complete[0]
+    for c in candidates:
+        if (c / "Antigravity.exe").is_file() and (c / "resources/bin/language_server.exe").is_file():
+            return c
+    return default
 
 
 def state_dir():
@@ -289,8 +363,8 @@ def launch_antigravity(app=None):
 
 def current_status(pkg_dir=HERE, store=None, app=None):
     store = store or state_dir()
-    app = app or app_dir()
     release = read_json(pkg_dir / "release.json") or {}
+    app = app or app_dir(release.get("host"))
     owned = read_json(store / "owned.json")
     installed_release = (owned or {}).get("release") or {}
     installed_build = (owned or {}).get("build")
@@ -303,6 +377,7 @@ def current_status(pkg_dir=HERE, store=None, app=None):
         "python_ok": sys.version_info >= (3, 11),
         "python_version": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
         "is_admin": is_admin(),
+        "app_dir": str(app),
         "app_present": (app / "Antigravity.exe").is_file() and (app / "resources/bin/language_server.exe").is_file(),
         "package_version": release.get("version", "unknown"),
         "package_flavor": release.get("flavor", "subscription"),
@@ -376,6 +451,8 @@ def print_banner(st):
     print(f"  Antigravity Codex 原生订阅模型插件安装器  v{st['package_version']}（{flavor_label}）")
     print("=" * 64)
     print(f"  适配宿主版本 : Antigravity {st['package_host']}")
+    if st.get("app_dir"):
+        print(f"  目标安装目录 : {st['app_dir']}")
     print(f"  本包构建号   : {st['package_build']}")
     print(f"  Python 环境  : {st['python_version']}")
     if st["installed"]:
@@ -404,13 +481,14 @@ def main(argv=None):
         print("[错误] 请先将整个发布包 ZIP 完整解压到文件夹，再双击本脚本。")
         return 1
 
-    app = app_dir()
+    expected_host = (read_json(HERE / "release.json") or {}).get("host")
+    app = app_dir(expected_host)
     while True:
         st = current_status(app=app)
         print()
         print_banner(st)
         if not st["app_present"]:
-            print("[警告] 未在默认目录找到 Antigravity（%LOCALAPPDATA%\\Programs\\antigravity）。")
+            print(f"[警告] 未在默认目录找到 Antigravity（{app}）。")
         primary_label = "重新校验/修复本版本" if st["same_build"] else ("迁移并适配新版宿主" if st.get("host_changed") else ("升级到此版本" if st["installed"] else "安装此版本"))
         print(f"  [1] {primary_label}")
         print("  [2] 修复损坏或误删的插件文件（repair）")

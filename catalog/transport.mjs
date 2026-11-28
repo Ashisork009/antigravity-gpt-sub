@@ -1,28 +1,45 @@
-// Fixed-origin HTTP transport reused from the validated 2.35.1 v3.3 adapter.
+// Fixed-origin HTTP transport reused from the validated desktop adapter.
 import { request as httpsRequest } from 'node:https';
 import { brotliDecompressSync, gunzipSync, inflateSync } from 'node:zlib';
 const cloudHost = 'daily-cloudcode-pa.googleapis.com';
 const apiHost = 'generativelanguage.googleapis.com';
-const maxBody = 32 * 1024 * 1024;
+const maxBody = 256 * 1024 * 1024;
 const gzip = { gzip: gunzipSync, br: brotliDecompressSync, deflate: inflateSync };
-const error = (status, message) => Object.assign(new Error(message), { status });
+const error = (status, message, reason) => Object.assign(new Error(message), reason ? { status, reason } : { status });
+const tooLarge = () => error(413, 'Payload exceeds local router limit', 'request_payload_too_large');
 
-async function collect(stream) {
+async function collect(stream, limit = maxBody) {
   const chunks = [];
   let length = 0;
   for await (const chunk of stream) {
     length += chunk.length;
-    if (length > maxBody) throw error(413, 'Payload exceeds probe limit');
+    if (length > limit) throw tooLarge();
     chunks.push(chunk);
   }
   return Buffer.concat(chunks);
 }
 
-function readJson(bytes, encoding) {
+function readJson(bytes, encoding, limit = maxBody) {
+  let raw;
   try {
-    const raw = !encoding || encoding === 'identity' ? bytes : gzip[encoding](bytes, { maxOutputLength: maxBody });
+    if (!encoding || encoding === 'identity') {
+      if (bytes.length > limit) throw tooLarge();
+      raw = bytes;
+    } else {
+      const decompress = gzip[encoding];
+      if (!decompress) return undefined;
+      raw = decompress(bytes, { maxOutputLength: limit });
+    }
+  } catch (err) {
+    if (err?.status === 413 || err?.code === 'ERR_BUFFER_TOO_LARGE' || err?.code === 'ERR_MEMORY_ALLOCATION_FAILED') throw tooLarge();
+    return undefined;
+  }
+  try {
     return JSON.parse(raw.toString('utf8'));
-  } catch { return undefined; }
+  } catch (err) {
+    if (err?.code === 'ERR_STRING_TOO_LONG') throw tooLarge();
+    return undefined;
+  }
 }
 
 function forGoogle(headers, catalog) {
@@ -46,4 +63,4 @@ function callGoogle({ origin, path, method, headers, signal, body }) {
   });
 }
 
-export {collect,readJson,forGoogle,callGoogle,error,cloudHost,apiHost};
+export {collect,readJson,forGoogle,callGoogle,error,cloudHost,apiHost,maxBody};

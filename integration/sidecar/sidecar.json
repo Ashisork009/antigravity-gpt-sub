@@ -1,0 +1,7 @@
+{
+  "display_name": "原生模型路由开关",
+  "description": "按插件启用状态续订当前语言服务的本地路由。",
+  "command": "node",
+  "args": ["renew.mjs"],
+  "restart_policy": "on-failure"
+}
